@@ -21,6 +21,7 @@ var serveCmd = cobra.Command{
 }
 
 func serve(globalConfig *conf.GlobalConfiguration, config *conf.Configuration) {
+	config.Mailer.Autoconfirm = true
 	db, err := storage.Dial(globalConfig)
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)

@@ -2,6 +2,9 @@ package models
 
 import (
 	"database/sql"
+	"fmt"
+	"crypto/rand"
+	"encoding/hex"
 	"strings"
 	"time"
 
@@ -19,11 +22,13 @@ var SystemUserUUID = uuid.Nil
 // User respresents a registered user with email/password authentication
 type User struct {
 	InstanceID uuid.UUID `json:"-" db:"instance_id"`
-	ID         uuid.UUID `json:"id" db:"id"`
+	ID         uuid.UUID `json:"id" db:"temp_id"`
+	UID        string    `db:"uid"`
 
 	Aud               string             `json:"aud" db:"aud"`
 	Role              string             `json:"role" db:"role"`
 	Email             storage.NullString `json:"email" db:"email"`
+	PasswordDigest string             `json:"-" db:"password_digest"`
 	EncryptedPassword string             `json:"-" db:"encrypted_password"`
 	EmailConfirmedAt  *time.Time         `json:"email_confirmed_at,omitempty" db:"email_confirmed_at"`
 	InvitedAt         *time.Time         `json:"invited_at,omitempty" db:"invited_at"`
@@ -75,9 +80,11 @@ func NewUser(instanceID uuid.UUID, email, password, aud string, userData map[str
 		InstanceID:        instanceID,
 		ID:                id,
 		Aud:               aud,
+		UID:               generateUID(),
 		Email:             storage.NullString(strings.ToLower(email)),
 		UserMetaData:      userData,
 		EncryptedPassword: pw,
+		PasswordDigest: pw,
 	}
 	return user, nil
 }
@@ -89,6 +96,15 @@ func NewSystemUser(instanceID uuid.UUID, aud string) *User {
 		Aud:          aud,
 		IsSuperAdmin: true,
 	}
+}
+
+func generateUID() string {
+
+	bytes := make([]byte, 5)
+	if _, err := rand.Read(bytes); err != nil {
+		return ""
+	}
+	return strings.ToUpper(fmt.Sprintf("ID%s",  hex.EncodeToString(bytes)))
 }
 
 func (User) TableName() string {
