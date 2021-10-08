@@ -1,6 +1,8 @@
 package conf
 
 import (
+	"crypto/rsa"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/url"
@@ -9,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gobwas/glob"
+	jwt "github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 	"github.com/sirupsen/logrus"
@@ -51,12 +54,14 @@ func (c *DBConfiguration) Validate() error {
 
 // JWTConfiguration holds all the JWT related configuration.
 type JWTConfiguration struct {
+	Algorithm        string   `json:"algorithm" default:"HS256"`
 	Secret           string   `json:"secret" required:"true"`
 	Exp              int      `json:"exp"`
 	Aud              string   `json:"aud"`
 	AdminGroupName   string   `json:"admin_group_name" split_words:"true"`
 	AdminRoles       []string `json:"admin_roles" split_words:"true"`
 	DefaultGroupName string   `json:"default_group_name" split_words:"true"`
+	pKey             *rsa.PrivateKey
 }
 
 // MFAConfiguration holds all the MFA related Configuration
@@ -106,18 +111,19 @@ type GlobalConfiguration struct {
 	RateLimitTokenRefresh float64 `split_words:"true" default:"30"`
 	RateLimitSso          float64 `split_words:"true" default:"30"`
 
-	SiteURL           string   `json:"site_url" split_words:"true" required:"true"`
-	URIAllowList      []string `json:"uri_allow_list" split_words:"true"`
-	URIAllowListMap   map[string]glob.Glob
-	PasswordMinLength int                      `json:"password_min_length" split_words:"true"`
-	JWT               JWTConfiguration         `json:"jwt"`
-	Mailer            MailerConfiguration      `json:"mailer"`
-	Sms               SmsProviderConfiguration `json:"sms"`
-	DisableSignup     bool                     `json:"disable_signup" split_words:"true"`
-	Webhook           WebhookConfig            `json:"webhook" split_words:"true"`
-	Security          SecurityConfiguration    `json:"security"`
-	MFA               MFAConfiguration         `json:"MFA"`
-	Cookie            struct {
+	SiteURL             string   `json:"site_url" split_words:"true" required:"true"`
+	URIAllowList        []string `json:"uri_allow_list" split_words:"true"`
+	URIAllowListMap     map[string]glob.Glob
+	PasswordMinLength   int                      `json:"password_min_length" split_words:"true"`
+	JWT                 JWTConfiguration         `json:"jwt"`
+	Mailer              MailerConfiguration      `json:"mailer"`
+	Sms                 SmsProviderConfiguration `json:"sms"`
+	DisableSignup       bool                     `json:"disable_signup" split_words:"true"`
+	FirstUserSuperAdmin bool                     `json:"first_user_super_admin" split_words:"true"`
+	Webhook             WebhookConfig            `json:"webhook" split_words:"true"`
+	Security            SecurityConfiguration    `json:"security"`
+	MFA                 MFAConfiguration         `json:"MFA"`
+	Cookie              struct {
 		Key      string `json:"key"`
 		Domain   string `json:"domain"`
 		Duration int    `json:"duration"`
@@ -409,6 +415,7 @@ func (config *GlobalConfiguration) ApplyDefaults() error {
 	if config.MFA.ChallengeExpiryDuration < defaultChallengeExpiryDuration {
 		config.MFA.ChallengeExpiryDuration = defaultChallengeExpiryDuration
 	}
+	config.JWT.InitializeSigningSecret()
 
 	return nil
 }
@@ -496,4 +503,45 @@ func (t *VonageProviderConfiguration) Validate() error {
 		return errors.New("missing Vonage 'from' parameter")
 	}
 	return nil
+}
+
+func (j *JWTConfiguration) InitializeSigningSecret() {
+	if j.Algorithm == "RS256" {
+		pemPrivateKey, err := base64.URLEncoding.DecodeString(j.Secret)
+		if err != nil {
+			panic(err)
+		}
+
+		key, err := jwt.ParseRSAPrivateKeyFromPEM(pemPrivateKey)
+		if err != nil {
+			panic(err)
+		}
+
+		j.pKey = key
+	}
+}
+
+func (j *JWTConfiguration) GetSigningKey() interface{} {
+	if j.Algorithm == "RS256" {
+		return j.pKey
+	}
+
+	return []byte(j.Secret)
+}
+
+func (j *JWTConfiguration) GetVerificationKey() interface{} {
+	if j.Algorithm == "RS256" {
+		return j.pKey.Public()
+	}
+
+	return []byte(j.Secret)
+}
+
+func (j *JWTConfiguration) GetSigningMethod() jwt.SigningMethod {
+	switch j.Algorithm {
+	case "RS256":
+		return jwt.SigningMethodRS256
+	default:
+		return jwt.SigningMethodHS256
+	}
 }

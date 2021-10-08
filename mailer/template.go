@@ -2,10 +2,10 @@ package mailer
 
 import (
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 
-	"github.com/badoux/checkmail"
 	"github.com/netlify/gotrue/conf"
 	"github.com/netlify/gotrue/models"
 )
@@ -75,7 +75,8 @@ const defaultReauthenticateMail = `<h2>Confirm reauthentication</h2>
 // ValidateEmail returns nil if the email is valid,
 // otherwise an error indicating the reason it is invalid
 func (m TemplateMailer) ValidateEmail(email string) error {
-	return checkmail.ValidateFormat(email)
+	_, err := mail.ParseAddress(email)
+	return err
 }
 
 // InviteMail sends a invite mail to a new user
