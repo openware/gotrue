@@ -20,8 +20,12 @@ type GoTrueClaims struct {
 	Phone        string                 `json:"phone"`
 	AppMetaData  map[string]interface{} `json:"app_metadata"`
 	UserMetaData map[string]interface{} `json:"user_metadata"`
-	Identities   []*models.Identity     `json:"identities"`
-	Role         string                 `json:"role"`
+
+	MainAsymmetricKey          string `json:"asymmetric_key"`
+	MainAsymmetricKeyAlgorithm string `json:"asymmetric_key_algorithm"`
+
+	Identities []*models.Identity `json:"identities"`
+	Role       string             `json:"role"`
 }
 
 // AccessTokenResponse represents an OAuth2 success response
@@ -191,7 +195,12 @@ func (a *API) RefreshTokenGrant(ctx context.Context, w http.ResponseWriter, r *h
 			return internalServerError("error retrieving identities").WithInternalError(terr)
 		}
 
-		tokenString, terr = generateAccessToken(user, identities, time.Second*time.Duration(config.JWT.Exp), config.JWT.Secret)
+		key, terr := models.FindMainAsymmetricKeyByUser(tx, user)
+		if terr != nil {
+			return internalServerError("Database error granting user").WithInternalError(terr)
+		}
+
+		tokenString, terr = generateAccessToken(user, identities, key, time.Second*time.Duration(config.JWT.Exp), config.JWT.Secret)
 		if terr != nil {
 			return internalServerError("error generating jwt token").WithInternalError(terr)
 		}
@@ -216,19 +225,24 @@ func (a *API) RefreshTokenGrant(ctx context.Context, w http.ResponseWriter, r *h
 	})
 }
 
-func generateAccessToken(user *models.User, identities []*models.Identity, expiresIn time.Duration, secret string) (string, error) {
+func generateAccessToken(user *models.User, identities []*models.Identity, key *models.AsymmetricKey, expiresIn time.Duration, secret string) (string, error) {
 	claims := &GoTrueClaims{
 		StandardClaims: jwt.StandardClaims{
 			Subject:   user.ID.String(),
 			Audience:  user.Aud,
 			ExpiresAt: time.Now().Add(expiresIn).Unix(),
 		},
-		Email:        user.GetEmail(),
-		Phone:        user.GetPhone(),
-		AppMetaData:  user.AppMetaData,
-		UserMetaData: user.UserMetaData,
-		Identities:   identities,
-		Role:         user.Role,
+		Email:                      user.GetEmail(),
+		Phone:                      user.GetPhone(),
+		AppMetaData:                user.AppMetaData,
+		UserMetaData:               user.UserMetaData,
+		Identities:                 identities,
+		Role:                       user.Role,
+	}
+
+	if key != nil {
+		claims.MainAsymmetricKey = key.Key
+		claims.MainAsymmetricKeyAlgorithm = key.Algorithm
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -254,8 +268,12 @@ func (a *API) issueRefreshToken(ctx context.Context, conn *storage.Connection, u
 		if terr != nil {
 			return internalServerError("Database error granting user").WithInternalError(terr)
 		}
+		key, terr := models.FindMainAsymmetricKeyByUser(tx, user)
+		if terr != nil {
+			return internalServerError("Database error granting user").WithInternalError(terr)
+		}
 
-		tokenString, terr = generateAccessToken(user, identities, time.Second*time.Duration(config.JWT.Exp), config.JWT.Secret)
+		tokenString, terr = generateAccessToken(user, identities, key, time.Second*time.Duration(config.JWT.Exp), config.JWT.Secret)
 		if terr != nil {
 			return internalServerError("error generating jwt token").WithInternalError(terr)
 		}
