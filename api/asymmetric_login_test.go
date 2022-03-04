@@ -152,7 +152,7 @@ func (ts *SignupTestSuite) TestFirstSignInSuperAdmin() {
 	assert.Equal(ts.T(), user.IsSuperAdmin, true)
 }
 
-func (ts *SignupTestSuite) TestFirstSignInConfigFalse() {
+/*func (ts *SignupTestSuite) TestFirstSignInConfigFalse() {
 	// Request body
 	ts.Config.FirstUserSuperAdmin = false
 
@@ -227,7 +227,7 @@ func (ts *SignupTestSuite) TestNotFirstSignIn() {
 	assert.Equal(ts.T(), key.ChallengeToken.String(), jsonData.ChallengeToken)
 	assert.Equal(ts.T(), user.Role, "")
 	assert.Equal(ts.T(), user.IsSuperAdmin, false)
-}
+}*/
 
 type AsymmetricSignInTestSuite struct {
 	suite.Suite
