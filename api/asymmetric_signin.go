@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gofrs/uuid"
@@ -67,6 +68,8 @@ func (a *API) GetChallengeToken(w http.ResponseWriter, r *http.Request) error {
 			})
 
 			first, terr := models.IsFirstUser(tx)
+
+			fmt.Println(first)
 
 			if terr != nil {
 				return terr
