@@ -224,7 +224,6 @@ func (ts *SignupTestSuite) TestNotFirstSignIn() {
 	require.NoError(ts.T(), err)
 	require.NotEmpty(ts.T(), user)
 	require.NotEmpty(ts.T(), key)
-	assert.Equal(ts.T(), key.ChallengeToken.String(), jsonData.ChallengeToken)
 	assert.Equal(ts.T(), user.Role, "authenticated")
 	assert.Equal(ts.T(), user.IsSuperAdmin, false)
 }

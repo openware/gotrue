@@ -79,6 +79,8 @@ func (a *API) GetChallengeToken(w http.ResponseWriter, r *http.Request) error {
 				return terr
 			}
 
+			fmt.Println(config.FirstUserSuperAdmin)
+
 			if config.FirstUserSuperAdmin && first {
 				terr = user.SetSuperAdmin(tx)
 			}
