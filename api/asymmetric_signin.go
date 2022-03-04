@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gofrs/uuid"
@@ -73,13 +72,9 @@ func (a *API) GetChallengeToken(w http.ResponseWriter, r *http.Request) error {
 				Aud:      aud,
 			})
 
-			fmt.Println(first)
-
 			if terr != nil {
 				return terr
 			}
-
-			fmt.Println(config.FirstUserSuperAdmin)
 
 			if config.FirstUserSuperAdmin && first {
 				terr = user.SetSuperAdmin(tx)
