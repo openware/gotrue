@@ -361,7 +361,7 @@ func findUser(tx *storage.Connection, query string, args ...interface{}) (*User,
 func IsFirstUser(tx *storage.Connection) (bool, error) {
 	obj := &User{}
 	err := tx.Eager().Q().First(obj)
-	fmt.Println(err)
+	fmt.Println(obj)
 	if err != nil {
 		if errors.Cause(err) == sql.ErrNoRows {
 			return true, nil
