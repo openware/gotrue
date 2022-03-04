@@ -2,6 +2,7 @@ package models
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 	"time"
 
@@ -360,14 +361,13 @@ func findUser(tx *storage.Connection, query string, args ...interface{}) (*User,
 func IsFirstUser(tx *storage.Connection) (bool, error) {
 	obj := &User{}
 	err := tx.Eager().Q().First(obj)
+	fmt.Println(err)
 	if err != nil {
 		if errors.Cause(err) == sql.ErrNoRows {
 			return true, nil
 		}
-
 		return false, err
 	}
-
 	return false, nil
 }
 
