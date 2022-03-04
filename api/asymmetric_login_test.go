@@ -128,6 +128,8 @@ func (ts *SignupTestSuite) TestFirstSignInSuperAdmin() {
 		"algorithm": "ETH",
 	}))
 
+	ts.Config.FirstUserSuperAdmin = true
+
 	// Setup request
 	req := httptest.NewRequest(http.MethodPost, "/sign_challenge", &buffer)
 	req.Header.Set("Content-Type", "application/json")
