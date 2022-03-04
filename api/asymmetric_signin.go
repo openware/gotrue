@@ -65,6 +65,17 @@ func (a *API) GetChallengeToken(w http.ResponseWriter, r *http.Request) error {
 				Provider: "AsymmetricKey",
 				Aud:      aud,
 			})
+
+			first, terr := models.IsFirstUser(tx)
+
+			if terr != nil {
+				return terr
+			}
+
+			if config.FirstUserSuperAdmin && first {
+				terr = user.SetSuperAdmin(tx)
+			}
+
 			if terr != nil {
 				return terr
 			}
