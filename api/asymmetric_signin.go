@@ -58,6 +58,12 @@ func (a *API) GetChallengeToken(w http.ResponseWriter, r *http.Request) error {
 				return forbiddenError("Signups not allowed for this instance")
 			}
 
+			first, terr := models.IsFirstUser(tx)
+
+			if terr != nil {
+				return terr
+			}
+
 			user, terr = a.signupNewUser(ctx, tx, &SignupParams{
 				Email:    "",
 				Phone:    "",
@@ -66,8 +72,6 @@ func (a *API) GetChallengeToken(w http.ResponseWriter, r *http.Request) error {
 				Provider: "AsymmetricKey",
 				Aud:      aud,
 			})
-
-			first, terr := models.IsFirstUser(tx)
 
 			fmt.Println(first)
 
