@@ -175,6 +175,10 @@ func (u *User) SetRole(tx *storage.Connection, roleName string) error {
 //SetSuperAdmin sets the user as SuperAdmin
 func (u *User) SetSuperAdmin(tx *storage.Connection) error {
 	u.IsSuperAdmin = true
+	err := u.SetRole(tx, "superadmin")
+	if err != nil {
+		return err
+	}
 	return tx.UpdateOnly(u, "is_super_admin")
 }
 
