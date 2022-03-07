@@ -301,18 +301,15 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 
 	err = conn.Transaction(func(tx *storage.Connection) error {
 		var terr error
-		if terr = tx.Create(user); terr != nil {
-			return internalServerError("Database error saving new user").WithInternalError(terr)
-		}
-
 		first, terr := models.AnyUser(tx)
 
 		if terr != nil {
 			return terr
 		}
 
-		fmt.Println(config.FirstUserSuperAdmin)
-		fmt.Println(first)
+		if terr = tx.Create(user); terr != nil {
+			return internalServerError("Database error saving new user").WithInternalError(terr)
+		}
 
 		if config.FirstUserSuperAdmin && first {
 			terr = user.SetSuperAdmin(tx)
