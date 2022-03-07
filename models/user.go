@@ -364,7 +364,7 @@ func AnyUser(tx *storage.Connection) (bool, error) {
 		if errors.Cause(err) == sql.ErrNoRows {
 			return false, nil
 		}
-		return true, err
+		return false, err
 	}
 	return true, nil
 }
