@@ -311,6 +311,9 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 			return terr
 		}
 
+		fmt.Println(config.FirstUserSuperAdmin)
+		fmt.Println(first)
+
 		if config.FirstUserSuperAdmin && first {
 			terr = user.SetSuperAdmin(tx)
 			if terr != nil {
