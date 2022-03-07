@@ -357,7 +357,7 @@ func findUser(tx *storage.Connection, query string, args ...interface{}) (*User,
 	return obj, nil
 }
 
-func IsFirstUser(tx *storage.Connection) (bool, error) {
+func AnyUser(tx *storage.Connection) (bool, error) {
 	obj := &User{}
 	err := tx.Eager().Q().First(obj)
 	if err != nil {

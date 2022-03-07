@@ -304,6 +304,21 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 		if terr = tx.Create(user); terr != nil {
 			return internalServerError("Database error saving new user").WithInternalError(terr)
 		}
+
+		first, terr := models.AnyUser(tx)
+
+		if terr != nil {
+			return terr
+		}
+
+		if config.FirstUserSuperAdmin && first {
+			terr = user.SetSuperAdmin(tx)
+		}
+
+		if terr != nil {
+			return terr
+		}
+
 		if terr = user.SetRole(tx, config.JWT.DefaultGroupName); terr != nil {
 			return internalServerError("Database error updating user").WithInternalError(terr)
 		}

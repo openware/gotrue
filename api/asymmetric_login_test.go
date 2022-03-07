@@ -121,14 +121,15 @@ func (ts *SignupTestSuite) TestWrongKeyFormatGetChallengeToken() {
 }
 
 func (ts *SignupTestSuite) TestFirstSignInSuperAdmin() {
+	//FirstUser is SuperAdmin config on true
+	ts.Config.FirstUserSuperAdmin = true
+
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"key":       "0x6BE46d7D863666546b77951D5dfffcF075F36E68",
 		"algorithm": "ETH",
 	}))
-
-	ts.Config.FirstUserSuperAdmin = true
 
 	// Setup request
 	req := httptest.NewRequest(http.MethodPost, "/sign_challenge", &buffer)
@@ -155,9 +156,10 @@ func (ts *SignupTestSuite) TestFirstSignInSuperAdmin() {
 }
 
 func (ts *SignupTestSuite) TestFirstSignInConfigFalse() {
-	// Request body
+	//FirstUser is SuperAdmin config on false
 	ts.Config.FirstUserSuperAdmin = false
 
+	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"key":       "0x6BE46d7D863666546b77951D5dfffcF075F36E68",
@@ -189,6 +191,9 @@ func (ts *SignupTestSuite) TestFirstSignInConfigFalse() {
 }
 
 func (ts *SignupTestSuite) TestNotFirstSignIn() {
+	//FirstUser is SuperAdmin config on true
+	ts.Config.FirstUserSuperAdmin = true
+
 	// Request body
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
