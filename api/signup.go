@@ -301,7 +301,7 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 
 	err = conn.Transaction(func(tx *storage.Connection) error {
 		var terr error
-		first, terr := models.AnyUser(tx)
+		exist_user, terr := models.AnyUser(tx)
 
 		if terr != nil {
 			return terr
@@ -311,7 +311,7 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 			return internalServerError("Database error saving new user").WithInternalError(terr)
 		}
 
-		if config.FirstUserSuperAdmin && first {
+		if config.FirstUserSuperAdmin && !exist_user {
 			terr = user.SetSuperAdmin(tx)
 			if terr != nil {
 				return terr

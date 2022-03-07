@@ -362,11 +362,11 @@ func AnyUser(tx *storage.Connection) (bool, error) {
 	err := tx.Eager().Q().First(obj)
 	if err != nil {
 		if errors.Cause(err) == sql.ErrNoRows {
-			return true, nil
+			return false, nil
 		}
-		return false, err
+		return true, err
 	}
-	return false, nil
+	return true, nil
 }
 
 // FindUserByConfirmationToken finds users with the matching confirmation token.
