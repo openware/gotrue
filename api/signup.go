@@ -313,15 +313,15 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 
 		if config.FirstUserSuperAdmin && first {
 			terr = user.SetSuperAdmin(tx)
+			if terr != nil {
+				return terr
+			}
+		} else {
+			if terr = user.SetRole(tx, config.JWT.DefaultGroupName); terr != nil {
+				return internalServerError("Database error updating user").WithInternalError(terr)
+			}
 		}
 
-		if terr != nil {
-			return terr
-		}
-
-		if terr = user.SetRole(tx, config.JWT.DefaultGroupName); terr != nil {
-			return internalServerError("Database error updating user").WithInternalError(terr)
-		}
 		if terr = triggerEventHooks(ctx, tx, ValidateEvent, user, instanceID, config); terr != nil {
 			return terr
 		}
