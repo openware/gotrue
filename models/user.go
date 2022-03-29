@@ -172,6 +172,16 @@ func (u *User) SetRole(tx *storage.Connection, roleName string) error {
 	return tx.UpdateOnly(u, "role")
 }
 
+//SetSuperAdmin sets the user as SuperAdmin
+func (u *User) SetSuperAdmin(tx *storage.Connection) error {
+	u.IsSuperAdmin = true
+	err := u.SetRole(tx, "superadmin")
+	if err != nil {
+		return err
+	}
+	return tx.UpdateOnly(u, "is_super_admin")
+}
+
 // HasRole returns true when the users role is set to roleName
 func (u *User) HasRole(roleName string) bool {
 	return u.Role == roleName
@@ -347,6 +357,18 @@ func findUser(tx *storage.Connection, query string, args ...interface{}) (*User,
 	return obj, nil
 }
 
+func AnyUser(tx *storage.Connection) (bool, error) {
+	obj := &User{}
+	err := tx.Eager().Q().First(obj)
+	if err != nil {
+		if errors.Cause(err) == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 // FindUserByConfirmationToken finds users with the matching confirmation token.
 func FindUserByConfirmationToken(tx *storage.Connection, token string) (*User, error) {
 	user, err := findUser(tx, "confirmation_token = ?", token)
@@ -402,6 +424,24 @@ func FindUserWithRefreshToken(tx *storage.Connection, token string) (*User, *Ref
 	}
 
 	return user, refreshToken, nil
+}
+
+// FindUserWithRefreshToken finds a user from the provided refresh token.
+func FindUserWithAsymmetrickey(tx *storage.Connection, key string) (*User, *AsymmetricKey, error) {
+	asymmetricKey := &AsymmetricKey{}
+	if err := tx.Where("key = ? and main = true", key).First(asymmetricKey); err != nil {
+		if errors.Cause(err) == sql.ErrNoRows {
+			return nil, nil, AsymmetricKeyNotFoundError{}
+		}
+		return nil, nil, errors.Wrap(err, "error finding asymmetric key")
+	}
+
+	user, err := findUser(tx, "id = ?", asymmetricKey.UserID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return user, asymmetricKey, nil
 }
 
 // FindUsersInAudience finds users with the matching audience.
