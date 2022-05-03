@@ -54,7 +54,6 @@ func (ts *AdminTestSuite) makeSuperAdmin(email string) string {
 
 	u.Role = "supabase_admin"
 
-
 	key, err := models.FindMainAsymmetricKeyByUser(ts.API.db, u)
 	require.NoError(ts.T(), err, "Error finding keys")
 
