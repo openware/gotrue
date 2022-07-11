@@ -117,29 +117,36 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 		sharedLimiter := api.limitEmailSentHandler()
 		r.With(sharedLimiter).With(api.requireAdminCredentials).Post("/invite", api.Invite)
 		r.With(sharedLimiter).With(api.verifyCaptcha).Post("/signup", api.Signup)
+		r.With(sharedLimiter).With(api.verifyCaptcha).Post("/sign_challenge", api.GetChallengeToken)
+		r.With(sharedLimiter).With(api.verifyCaptcha).Post("/asymmetric_login", api.SignInWithAsymmetricKey)
 		r.With(sharedLimiter).With(api.verifyCaptcha).With(api.requireEmailProvider).Post("/recover", api.Recover)
 		r.With(sharedLimiter).With(api.verifyCaptcha).Post("/magiclink", api.MagicLink)
 
 		r.With(sharedLimiter).With(api.verifyCaptcha).Post("/otp", api.Otp)
 
 		r.With(api.limitHandler(
-			// Allow requests at a rate of 30 per 5 minutes.
-			tollbooth.NewLimiter(30.0/(60*5), &limiter.ExpirableOptions{
+			// Allow requests at the specified rate per 5 minutes.
+			tollbooth.NewLimiter(api.config.RateLimitTokenRefresh/(60*5), &limiter.ExpirableOptions{
 				DefaultExpirationTTL: time.Hour,
 			}).SetBurst(30),
-		)).Post("/token", api.Token)
+		)).With(api.verifyCaptcha).Post("/token", api.Token)
 
 		r.With(api.limitHandler(
-			// Allow requests at a rate of 30 per 5 minutes.
-			tollbooth.NewLimiter(30.0/(60*5), &limiter.ExpirableOptions{
+			// Allow requests at the specified rate per 5 minutes.
+			tollbooth.NewLimiter(api.config.RateLimitVerify/(60*5), &limiter.ExpirableOptions{
 				DefaultExpirationTTL: time.Hour,
 			}).SetBurst(30),
 		)).Route("/verify", func(r *router) {
 			r.Get("/", api.Verify)
-			r.Post("/", api.Verify)
+			r.With(api.verifyCaptcha).Post("/", api.Verify)
 		})
 
 		r.With(api.requireAuthentication).Post("/logout", api.Logout)
+
+		r.Route("/reauthenticate", func(r *router) {
+			r.Use(api.requireAuthentication)
+			r.Get("/", api.Reauthenticate)
+		})
 
 		r.Route("/user", func(r *router) {
 			r.Use(api.requireAuthentication)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -55,17 +56,20 @@ func (ts *InviteTestSuite) makeSuperAdmin(email string) string {
 		require.NoError(ts.T(), ts.API.db.Destroy(u), "Error deleting user")
 	}
 
-	u, err := models.NewUser(ts.instanceID, email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"})
+	u, err := models.NewUser(ts.instanceID, "123456789", email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"})
 	require.NoError(ts.T(), err, "Error making new user")
 
 	u.Role = "supabase_admin"
 
-	token, err := generateAccessToken(u, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.Secret)
+	key, err := models.FindMainAsymmetricKeyByUser(ts.API.db, u)
+	require.NoError(ts.T(), err, "Error finding keys")
+
+	token, err := generateAccessToken(u, key, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.GetSigningMethod(), ts.Config.JWT.GetSigningKey())
 	require.NoError(ts.T(), err, "Error generating access token")
 
 	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
 	_, err = p.Parse(token, func(token *jwt.Token) (interface{}, error) {
-		return []byte(ts.Config.JWT.Secret), nil
+		return ts.Config.JWT.GetVerificationKey(), nil
 	})
 	require.NoError(ts.T(), err, "Error parsing token")
 
@@ -126,6 +130,7 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 			"Verify invite with password",
 			"test@example.com",
 			map[string]interface{}{
+				"email":    "test@example.com",
 				"type":     "invite",
 				"token":    "asdf",
 				"password": "testing",
@@ -136,6 +141,7 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 			"Verify invite with no password",
 			"test1@example.com",
 			map[string]interface{}{
+				"email": "test1@example.com",
 				"type":  "invite",
 				"token": "asdf",
 			},
@@ -145,12 +151,12 @@ func (ts *InviteTestSuite) TestVerifyInvite() {
 
 	for _, c := range cases {
 		ts.Run(c.desc, func() {
-			user, err := models.NewUser(ts.instanceID, c.email, "", ts.Config.JWT.Aud, nil)
+			user, err := models.NewUser(ts.instanceID, "", c.email, "", ts.Config.JWT.Aud, nil)
 			now := time.Now()
 			user.InvitedAt = &now
 			user.ConfirmationSentAt = &now
 			user.EncryptedPassword = ""
-			user.ConfirmationToken = c.requestBody["token"].(string)
+			user.ConfirmationToken = fmt.Sprintf("%x", sha256.Sum224([]byte(c.email+c.requestBody["token"].(string))))
 			require.NoError(ts.T(), err)
 			require.NoError(ts.T(), ts.API.db.Create(user))
 

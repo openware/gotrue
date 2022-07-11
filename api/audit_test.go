@@ -46,17 +46,20 @@ func (ts *AuditTestSuite) SetupTest() {
 }
 
 func (ts *AuditTestSuite) makeSuperAdmin(email string) string {
-	u, err := models.NewUser(ts.instanceID, email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"})
+	u, err := models.NewUser(ts.instanceID, "", email, "test", ts.Config.JWT.Aud, map[string]interface{}{"full_name": "Test User"})
 	require.NoError(ts.T(), err, "Error making new user")
 
 	u.Role = "supabase_admin"
 
-	token, err := generateAccessToken(u, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.Secret)
+	key, err := models.FindMainAsymmetricKeyByUser(ts.API.db, u)
+	require.NoError(ts.T(), err, "Error finding keys")
+
+	token, err := generateAccessToken(u, key, time.Second*time.Duration(ts.Config.JWT.Exp), ts.Config.JWT.GetSigningMethod(), ts.Config.JWT.GetSigningKey())
 	require.NoError(ts.T(), err, "Error generating access token")
 
 	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
 	_, err = p.Parse(token, func(token *jwt.Token) (interface{}, error) {
-		return []byte(ts.Config.JWT.Secret), nil
+		return ts.Config.JWT.GetVerificationKey(), nil
 	})
 	require.NoError(ts.T(), err, "Error parsing token")
 
@@ -121,7 +124,7 @@ func (ts *AuditTestSuite) TestAuditFilters() {
 
 func (ts *AuditTestSuite) prepareDeleteEvent() {
 	// DELETE USER
-	u, err := models.NewUser(ts.instanceID, "test-delete@example.com", "test", ts.Config.JWT.Aud, nil)
+	u, err := models.NewUser(ts.instanceID, "12345678", "test-delete@example.com", "test", ts.Config.JWT.Aud, nil)
 	require.NoError(ts.T(), err, "Error making new user")
 	require.NoError(ts.T(), ts.API.db.Create(u), "Error creating user")
 

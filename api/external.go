@@ -16,6 +16,7 @@ import (
 	"github.com/netlify/gotrue/conf"
 	"github.com/netlify/gotrue/models"
 	"github.com/netlify/gotrue/storage"
+	"github.com/netlify/gotrue/utilities"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,15 +39,16 @@ func (a *API) ExternalProviderRedirect(w http.ResponseWriter, r *http.Request) e
 	ctx := r.Context()
 	config := a.getConfig(ctx)
 
-	providerType := r.URL.Query().Get("provider")
-	scopes := r.URL.Query().Get("scopes")
+	query := r.URL.Query()
+	providerType := query.Get("provider")
+	scopes := query.Get("scopes")
 
-	p, err := a.Provider(ctx, providerType, scopes)
+	p, err := a.Provider(ctx, providerType, scopes, &query)
 	if err != nil {
 		return badRequestError("Unsupported provider: %+v", err).WithInternalError(err)
 	}
 
-	inviteToken := r.URL.Query().Get("invite_token")
+	inviteToken := query.Get("invite_token")
 	if inviteToken != "" {
 		_, userErr := models.FindUserByConfirmationToken(a.db, inviteToken)
 		if userErr != nil {
@@ -57,11 +59,11 @@ func (a *API) ExternalProviderRedirect(w http.ResponseWriter, r *http.Request) e
 		}
 	}
 
-	redirectURL := a.getRedirectURLOrReferrer(r, r.URL.Query().Get("redirect_to"))
+	redirectURL := a.getRedirectURLOrReferrer(r, query.Get("redirect_to"))
 	log := getLogEntry(r)
 	log.WithField("provider", providerType).Info("Redirecting to external provider")
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, ExternalProviderClaims{
+	token := jwt.NewWithClaims(config.JWT.GetSigningMethod(), ExternalProviderClaims{
 		NetlifyMicroserviceClaims: NetlifyMicroserviceClaims{
 			StandardClaims: jwt.StandardClaims{
 				ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
@@ -74,7 +76,7 @@ func (a *API) ExternalProviderRedirect(w http.ResponseWriter, r *http.Request) e
 		InviteToken: inviteToken,
 		Referrer:    redirectURL,
 	})
-	tokenString, err := token.SignedString([]byte(config.JWT.Secret))
+	tokenString, err := token.SignedString(config.JWT.GetVerificationKey())
 	if err != nil {
 		return internalServerError("Error creating state").WithInternalError(err)
 	}
@@ -233,7 +235,7 @@ func (a *API) internalExternalProviderCallback(w http.ResponseWriter, r *http.Re
 				if !emailData.Verified && !config.Mailer.Autoconfirm {
 					mailer := a.Mailer(ctx)
 					referrer := a.getReferrer(r)
-					if terr = sendConfirmation(tx, user, mailer, config.SMTP.MaxFrequency, referrer); terr != nil {
+					if terr = sendConfirmation(tx, user, mailer, config.SMTP.MaxFrequency, referrer, config.Mailer.OtpLength); terr != nil {
 						if errors.Is(terr, MaxFrequencyLimitError) {
 							return tooManyRequestsError("For security purposes, you can only request this once every minute")
 						}
@@ -243,7 +245,7 @@ func (a *API) internalExternalProviderCallback(w http.ResponseWriter, r *http.Re
 					return nil
 				}
 
-				if terr := models.NewAuditLogEntry(tx, instanceID, user, models.UserSignedUpAction, map[string]interface{}{
+				if terr := models.NewAuditLogEntry(tx, instanceID, user, models.UserSignedUpAction, "", map[string]interface{}{
 					"provider": providerType,
 				}); terr != nil {
 					return terr
@@ -257,7 +259,7 @@ func (a *API) internalExternalProviderCallback(w http.ResponseWriter, r *http.Re
 					return internalServerError("Error updating user").WithInternalError(terr)
 				}
 			} else {
-				if terr := models.NewAuditLogEntry(tx, instanceID, user, models.LoginAction, map[string]interface{}{
+				if terr := models.NewAuditLogEntry(tx, instanceID, user, models.LoginAction, "", map[string]interface{}{
 					"provider": providerType,
 				}); terr != nil {
 					return terr
@@ -345,7 +347,7 @@ func (a *API) processInvite(ctx context.Context, tx *storage.Connection, userDat
 		return nil, internalServerError("Database error updating user").WithInternalError(err)
 	}
 
-	if err := models.NewAuditLogEntry(tx, instanceID, user, models.InviteAcceptedAction, map[string]interface{}{
+	if err := models.NewAuditLogEntry(tx, instanceID, user, models.InviteAcceptedAction, "", map[string]interface{}{
 		"provider": providerType,
 	}); err != nil {
 		return nil, err
@@ -364,9 +366,9 @@ func (a *API) processInvite(ctx context.Context, tx *storage.Connection, userDat
 func (a *API) loadExternalState(ctx context.Context, state string) (context.Context, error) {
 	config := a.getConfig(ctx)
 	claims := ExternalProviderClaims{}
-	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
+	p := jwt.Parser{ValidMethods: []string{config.JWT.Algorithm}}
 	_, err := p.ParseWithClaims(state, &claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.JWT.Secret), nil
+		return config.JWT.GetVerificationKey(), nil
 	})
 	if err != nil || claims.Provider == "" {
 		return nil, badRequestError("OAuth state is invalid: %v", err)
@@ -383,7 +385,7 @@ func (a *API) loadExternalState(ctx context.Context, state string) (context.Cont
 }
 
 // Provider returns a Provider interface for the given name.
-func (a *API) Provider(ctx context.Context, name string, scopes string) (provider.Provider, error) {
+func (a *API) Provider(ctx context.Context, name string, scopes string, query *url.Values) (provider.Provider, error) {
 	config := a.getConfig(ctx)
 	name = strings.ToLower(name)
 
@@ -402,6 +404,8 @@ func (a *API) Provider(ctx context.Context, name string, scopes string) (provide
 		return provider.NewGitlabProvider(config.External.Gitlab, scopes)
 	case "google":
 		return provider.NewGoogleProvider(config.External.Google, scopes)
+	case "keycloak":
+		return provider.NewKeycloakProvider(config.External.Keycloak, scopes)
 	case "linkedin":
 		return provider.NewLinkedinProvider(config.External.Linkedin, scopes)
 	case "facebook":
@@ -416,6 +420,8 @@ func (a *API) Provider(ctx context.Context, name string, scopes string) (provide
 		return provider.NewTwitchProvider(config.External.Twitch, scopes)
 	case "twitter":
 		return provider.NewTwitterProvider(config.External.Twitter, scopes)
+	case "workos":
+		return provider.NewWorkOSProvider(config.External.WorkOS, query)
 	case "saml":
 		return provider.NewSamlProvider(config.External.Saml, a.db, getInstanceID(ctx))
 	case "zoom":
@@ -460,8 +466,18 @@ func getErrorQueryString(err error, errorID string, log logrus.FieldLogger) *url
 	case ErrorCause:
 		return getErrorQueryString(e.Cause(), errorID, log)
 	default:
-		q.Set("error", "server_error")
-		q.Set("error_description", err.Error())
+		error_type, error_description := "server_error", err.Error()
+
+		// Provide better error messages for certain user-triggered Postgres errors.
+		if pgErr := utilities.NewPostgresError(e); pgErr != nil {
+			error_description = pgErr.Message
+			if oauthErrorType, ok := oauthErrorMap[pgErr.HttpStatusCode]; ok {
+				error_type = oauthErrorType
+			}
+		}
+
+		q.Set("error", error_type)
+		q.Set("error_description", error_description)
 	}
 	return &q
 }

@@ -76,13 +76,13 @@ func (a *API) MagicLink(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	err = a.db.Transaction(func(tx *storage.Connection) error {
-		if terr := models.NewAuditLogEntry(tx, instanceID, user, models.UserRecoveryRequestedAction, nil); terr != nil {
+		if terr := models.NewAuditLogEntry(tx, instanceID, user, models.UserRecoveryRequestedAction, "", nil); terr != nil {
 			return terr
 		}
 
 		mailer := a.Mailer(ctx)
 		referrer := a.getReferrer(r)
-		return a.sendMagicLink(tx, user, mailer, config.SMTP.MaxFrequency, referrer)
+		return a.sendMagicLink(tx, user, mailer, config.SMTP.MaxFrequency, referrer, config.Mailer.OtpLength)
 	})
 	if err != nil {
 		if errors.Is(err, MaxFrequencyLimitError) {

@@ -97,7 +97,7 @@ func (a *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (contex
 	claims := NetlifyMicroserviceClaims{}
 	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
 	_, err := p.ParseWithClaims(signature, &claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.JWT.Secret), nil
+		return config.JWT.GetVerificationKey(), nil
 	})
 	if err != nil {
 		return nil, badRequestError("Operator microservice signature is invalid: %v", err)
@@ -234,6 +234,7 @@ func (a *API) verifyCaptcha(w http.ResponseWriter, req *http.Request) (context.C
 	if secret == "" {
 		return nil, internalServerError("server misconfigured")
 	}
+
 	verificationResult, err := security.VerifyRequest(req, secret)
 	if err != nil {
 		logrus.WithField("err", err).Infof("failed to validate result")

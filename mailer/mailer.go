@@ -14,29 +14,27 @@ import (
 // Mailer defines the interface a mailer must implement.
 type Mailer interface {
 	Send(user *models.User, subject, body string, data map[string]interface{}) error
-	InviteMail(user *models.User, referrerURL string) error
-	ConfirmationMail(user *models.User, referrerURL string) error
-	RecoveryMail(user *models.User, referrerURL string) error
-	MagicLinkMail(user *models.User, referrerURL string) error
-	EmailChangeMail(user *models.User, referrerURL string) error
+	InviteMail(user *models.User, otp, referrerURL string) error
+	ConfirmationMail(user *models.User, otp, referrerURL string) error
+	RecoveryMail(user *models.User, otp, referrerURL string) error
+	MagicLinkMail(user *models.User, otp, referrerURL string) error
+	EmailChangeMail(user *models.User, otpNew, otpCurrent, referrerURL string) error
+	ReauthenticateMail(user *models.User, otp string) error
 	ValidateEmail(email string) error
 	GetEmailActionLink(user *models.User, actionType, referrerURL string) (string, error)
 }
 
 // NewMailer returns a new gotrue mailer
 func NewMailer(instanceConfig *conf.Configuration) Mailer {
-	if instanceConfig.SMTP.Host == "" {
-		logrus.Infof("Noop mailer being used for %v", instanceConfig.SiteURL)
-		return &noopMailer{}
-	}
-
 	mail := gomail.NewMessage()
 	from := mail.FormatAddress(instanceConfig.SMTP.AdminEmail, instanceConfig.SMTP.SenderName)
 
-	return &TemplateMailer{
-		SiteURL: instanceConfig.SiteURL,
-		Config:  instanceConfig,
-		Mailer: &mailme.Mailer{
+	var mailClient MailClient
+	if instanceConfig.SMTP.Host == "" {
+		logrus.Infof("Noop mail client being used for %v", instanceConfig.SiteURL)
+		mailClient = &noopMailClient{}
+	} else {
+		mailClient = &mailme.Mailer{
 			Host:    instanceConfig.SMTP.Host,
 			Port:    instanceConfig.SMTP.Port,
 			User:    instanceConfig.SMTP.User,
@@ -44,7 +42,13 @@ func NewMailer(instanceConfig *conf.Configuration) Mailer {
 			From:    from,
 			BaseURL: instanceConfig.SiteURL,
 			Logger:  logrus.New(),
-		},
+		}
+	}
+
+	return &TemplateMailer{
+		SiteURL: instanceConfig.SiteURL,
+		Config:  instanceConfig,
+		Mailer:  mailClient,
 	}
 }
 

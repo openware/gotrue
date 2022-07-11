@@ -1,12 +1,16 @@
 package conf
 
 import (
+	"crypto/rsa"
 	"database/sql/driver"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
 	"time"
 
+	"github.com/gobwas/glob"
+	jwt "github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
 )
@@ -19,7 +23,7 @@ type OAuthProviderConfiguration struct {
 	Secret      string `json:"secret"`
 	RedirectURI string `json:"redirect_uri" split_words:"true"`
 	URL         string `json:"url"`
-	ApiURL      string `json:"api_url"`
+	ApiURL      string `json:"api_url" split_words:"true"`
 	Enabled     bool   `json:"enabled"`
 }
 
@@ -38,19 +42,24 @@ type SamlProviderConfiguration struct {
 
 // DBConfiguration holds all the database related configuration.
 type DBConfiguration struct {
-	Driver         string `json:"driver" required:"true"`
-	URL            string `json:"url" envconfig:"DATABASE_URL" required:"true"`
+	Driver string `json:"driver" required:"true"`
+	URL    string `json:"url" envconfig:"DATABASE_URL" required:"true"`
+
+	// MaxPoolSize defaults to 0 (unlimited).
+	MaxPoolSize    int    `json:"max_pool_size" split_words:"true"`
 	MigrationsPath string `json:"migrations_path" split_words:"true" default:"./migrations"`
 }
 
 // JWTConfiguration holds all the JWT related configuration.
 type JWTConfiguration struct {
+	Algorithm        string   `json:"algorithm" default:"HS256"`
 	Secret           string   `json:"secret" required:"true"`
 	Exp              int      `json:"exp"`
 	Aud              string   `json:"aud"`
 	AdminGroupName   string   `json:"admin_group_name" split_words:"true"`
 	AdminRoles       []string `json:"admin_roles" split_words:"true"`
 	DefaultGroupName string   `json:"default_group_name" split_words:"true"`
+	pKey             *rsa.PrivateKey
 }
 
 // GlobalConfiguration holds all the configuration that applies to all instances.
@@ -62,24 +71,27 @@ type GlobalConfiguration struct {
 		RequestIDHeader string `envconfig:"REQUEST_ID_HEADER"`
 		ExternalURL     string `json:"external_url" envconfig:"API_EXTERNAL_URL"`
 	}
-	DB                 DBConfiguration
-	External           ProviderConfiguration
-	Logging            LoggingConfig `envconfig:"LOG"`
-	OperatorToken      string        `split_words:"true" required:"false"`
-	MultiInstanceMode  bool
-	Tracing            TracingConfig
-	SMTP               SMTPConfiguration
-	RateLimitHeader    string  `split_words:"true"`
-	RateLimitEmailSent float64 `split_words:"true" default:"30"`
+	DB                    DBConfiguration
+	External              ProviderConfiguration
+	Logging               LoggingConfig `envconfig:"LOG"`
+	OperatorToken         string        `split_words:"true" required:"false"`
+	MultiInstanceMode     bool
+	Tracing               TracingConfig
+	SMTP                  SMTPConfiguration
+	RateLimitHeader       string  `split_words:"true"`
+	RateLimitEmailSent    float64 `split_words:"true" default:"30"`
+	RateLimitVerify       float64 `split_words:"true" default:"30"`
+	RateLimitTokenRefresh float64 `split_words:"true" default:"30"`
 }
 
 // EmailContentConfiguration holds the configuration for emails, both subjects and template URLs.
 type EmailContentConfiguration struct {
-	Invite       string `json:"invite"`
-	Confirmation string `json:"confirmation"`
-	Recovery     string `json:"recovery"`
-	EmailChange  string `json:"email_change" split_words:"true"`
-	MagicLink    string `json:"magic_link" split_words:"true"`
+	Invite           string `json:"invite"`
+	Confirmation     string `json:"confirmation"`
+	Recovery         string `json:"recovery"`
+	EmailChange      string `json:"email_change" split_words:"true"`
+	MagicLink        string `json:"magic_link" split_words:"true"`
+	Reauthentication string `json:"reauthentication"`
 }
 
 type ProviderConfiguration struct {
@@ -92,11 +104,13 @@ type ProviderConfiguration struct {
 	Gitlab      OAuthProviderConfiguration `json:"gitlab"`
 	Google      OAuthProviderConfiguration `json:"google"`
 	Notion      OAuthProviderConfiguration `json:"notion"`
+	Keycloak    OAuthProviderConfiguration `json:"keycloak"`
 	Linkedin    OAuthProviderConfiguration `json:"linkedin"`
 	Spotify     OAuthProviderConfiguration `json:"spotify"`
 	Slack       OAuthProviderConfiguration `json:"slack"`
 	Twitter     OAuthProviderConfiguration `json:"twitter"`
 	Twitch      OAuthProviderConfiguration `json:"twitch"`
+	WorkOS      OAuthProviderConfiguration `json:"workos"`
 	Email       EmailProviderConfiguration `json:"email"`
 	Phone       PhoneProviderConfiguration `json:"phone"`
 	Saml        SamlProviderConfiguration  `json:"saml"`
@@ -122,6 +136,7 @@ type MailerConfiguration struct {
 	URLPaths                 EmailContentConfiguration `json:"url_paths"`
 	SecureEmailChangeEnabled bool                      `json:"secure_email_change_enabled" split_words:"true" default:"true"`
 	OtpExp                   uint                      `json:"otp_exp" split_words:"true"`
+	OtpLength                int                       `json:"otp_length" split_words:"true"`
 }
 
 type PhoneProviderConfiguration struct {
@@ -170,24 +185,28 @@ type CaptchaConfiguration struct {
 }
 
 type SecurityConfiguration struct {
-	Captcha                     CaptchaConfiguration `json:"captcha"`
-	RefreshTokenRotationEnabled bool                 `json:"refresh_token_rotation_enabled" split_words:"true" default:"true"`
+	Captcha                               CaptchaConfiguration `json:"captcha"`
+	RefreshTokenRotationEnabled           bool                 `json:"refresh_token_rotation_enabled" split_words:"true" default:"true"`
+	RefreshTokenReuseInterval             int                  `json:"refresh_token_reuse_interval" split_words:"true"`
+	UpdatePasswordRequireReauthentication bool                 `json:"update_password_require_reauthentication" split_words:"true"`
 }
 
 // Configuration holds all the per-instance configuration.
 type Configuration struct {
-	SiteURL           string                   `json:"site_url" split_words:"true" required:"true"`
-	URIAllowList      []string                 `json:"uri_allow_list" split_words:"true"`
-	PasswordMinLength int                      `json:"password_min_length" split_words:"true"`
-	JWT               JWTConfiguration         `json:"jwt"`
-	SMTP              SMTPConfiguration        `json:"smtp"`
-	Mailer            MailerConfiguration      `json:"mailer"`
-	External          ProviderConfiguration    `json:"external"`
-	Sms               SmsProviderConfiguration `json:"sms"`
-	DisableSignup     bool                     `json:"disable_signup" split_words:"true"`
-	Webhook           WebhookConfig            `json:"webhook" split_words:"true"`
-	Security          SecurityConfiguration    `json:"security"`
-	Cookie            struct {
+	SiteURL             string   `json:"site_url" split_words:"true" required:"true"`
+	URIAllowList        []string `json:"uri_allow_list" split_words:"true"`
+	URIAllowListMap     map[string]glob.Glob
+	PasswordMinLength   int                      `json:"password_min_length" split_words:"true"`
+	JWT                 JWTConfiguration         `json:"jwt"`
+	SMTP                SMTPConfiguration        `json:"smtp"`
+	Mailer              MailerConfiguration      `json:"mailer"`
+	External            ProviderConfiguration    `json:"external"`
+	Sms                 SmsProviderConfiguration `json:"sms"`
+	DisableSignup       bool                     `json:"disable_signup" split_words:"true"`
+	FirstUserSuperAdmin bool                     `json:"first_user_super_admin" split_words:"true"`
+	Webhook             WebhookConfig            `json:"webhook" split_words:"true"`
+	Security            SecurityConfiguration    `json:"security"`
+	Cookie              struct {
 		Key      string `json:"key"`
 		Domain   string `json:"domain"`
 		Duration int    `json:"duration"`
@@ -197,7 +216,7 @@ type Configuration struct {
 func loadEnvironment(filename string) error {
 	var err error
 	if filename != "" {
-		err = godotenv.Load(filename)
+		err = godotenv.Overload(filename)
 	} else {
 		err = godotenv.Load()
 		// handle if .env file does not exist, this is OK
@@ -296,6 +315,11 @@ func (config *Configuration) ApplyDefaults() {
 		config.Mailer.OtpExp = 86400 // 1 day
 	}
 
+	if config.Mailer.OtpLength == 0 || config.Mailer.OtpLength < 6 || config.Mailer.OtpLength > 10 {
+		// 6-digit otp by default
+		config.Mailer.OtpLength = 6
+	}
+
 	if config.SMTP.MaxFrequency == 0 {
 		config.SMTP.MaxFrequency = 1 * time.Minute
 	}
@@ -332,10 +356,18 @@ func (config *Configuration) ApplyDefaults() {
 	if config.URIAllowList == nil {
 		config.URIAllowList = []string{}
 	}
-
+	if config.URIAllowList != nil {
+		config.URIAllowListMap = make(map[string]glob.Glob)
+		for _, uri := range config.URIAllowList {
+			g := glob.MustCompile(uri, '.', '/')
+			config.URIAllowListMap[uri] = g
+		}
+	}
 	if config.PasswordMinLength < defaultMinPasswordLength {
 		config.PasswordMinLength = defaultMinPasswordLength
 	}
+
+	config.JWT.InitializeSigningSecret()
 }
 
 func (config *Configuration) Value() (driver.Value, error) {
@@ -423,4 +455,45 @@ func (t *VonageProviderConfiguration) Validate() error {
 		return errors.New("Missing Vonage 'from' parameter")
 	}
 	return nil
+}
+
+func (j *JWTConfiguration) InitializeSigningSecret() {
+	if j.Algorithm == "RS256" {
+		pemPrivateKey, err := base64.URLEncoding.DecodeString(j.Secret)
+		if err != nil {
+			panic(err)
+		}
+
+		key, err := jwt.ParseRSAPrivateKeyFromPEM(pemPrivateKey)
+		if err != nil {
+			panic(err)
+		}
+
+		j.pKey = key
+	}
+}
+
+func (j *JWTConfiguration) GetSigningKey() interface{} {
+	if j.Algorithm == "RS256" {
+		return j.pKey
+	}
+
+	return []byte(j.Secret)
+}
+
+func (j *JWTConfiguration) GetVerificationKey() interface{} {
+	if j.Algorithm == "RS256" {
+		return j.pKey.Public()
+	}
+
+	return []byte(j.Secret)
+}
+
+func (j *JWTConfiguration) GetSigningMethod() jwt.SigningMethod {
+	switch j.Algorithm {
+	case "RS256":
+		return jwt.SigningMethodRS256
+	default:
+		return jwt.SigningMethodHS256
+	}
 }
