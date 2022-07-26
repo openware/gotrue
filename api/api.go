@@ -166,6 +166,12 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 					r.Get("/", api.adminUserGet)
 					r.Put("/", api.adminUserUpdate)
 					r.Delete("/", api.adminUserDelete)
+
+					r.Route("/labels", func(r *router) {
+						r.Use(api.loadUserLabels)
+
+						r.Post("/", api.adminUserLabelCreateOrUpdate)
+					})
 				})
 			})
 

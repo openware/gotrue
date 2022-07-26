@@ -345,3 +345,75 @@ func (a *API) adminUserDelete(w http.ResponseWriter, r *http.Request) error {
 
 	return sendJSON(w, http.StatusOK, map[string]interface{}{})
 }
+
+type adminUserLabelsParams struct {
+	Label string `json:"label"`
+	State string `json:"state"`
+}
+
+func (a *API) loadUserLabels(w http.ResponseWriter, req *http.Request) (context.Context, error) {
+	ctx := req.Context()
+	user := getUser(ctx)
+	params, err := a.getAdminUserLabelsParams(req)
+	if err != nil {
+		return ctx, internalServerError("Error loading user labels").WithInternalError(err)
+	}
+
+	label, err := models.FindUserLabel(a.db, user.ID, params.Label)
+	if err != nil {
+		return ctx, internalServerError("Error loading user labels").WithInternalError(err)
+	}
+
+	return withLabel(ctx, label), nil
+}
+
+func (a *API) getAdminUserLabelsParams(r *http.Request) (*adminUserLabelsParams, error) {
+	params := &adminUserLabelsParams{}
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		return nil, badRequestError("Could not decode admin user label params: %v", err)
+	}
+	return params, nil
+}
+
+func (a *API) adminUserLabelCreateOrUpdate(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	user := getUser(ctx)
+	instanceID := getInstanceID(ctx)
+	adminUser := getAdminUser(ctx)
+	existingLabel := getLabel(ctx)
+	params, err := a.getAdminUserLabelsParams(r)
+	if err != nil {
+		return err
+	}
+
+	err = a.db.Transaction(func(tx *storage.Connection) error {
+		var action models.AuditAction
+
+		if existingLabel != nil {
+			action = models.UserLabelModifiedAction
+
+			if terr := existingLabel.UpdateState(tx, params.State); terr != nil {
+				return terr
+			}
+		} else {
+			action = models.UserLabelCreatedAction
+			label := models.NewUserLabel(user.ID, params.Label, params.State)
+
+			if terr := tx.Create(label); terr != nil {
+				return terr
+			}
+		}
+
+		if terr := models.NewAuditLogEntry(tx, instanceID, adminUser, action, map[string]interface{}{
+			"user_id":    user.ID,
+			"user_email": user.Email,
+			"user_phone": user.Phone,
+		}); terr != nil {
+			return internalServerError("Error recording audit log entry").WithInternalError(terr)
+		}
+		return nil
+	})
+
+	return err
+}

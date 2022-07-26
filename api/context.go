@@ -26,6 +26,7 @@ const (
 	netlifyIDKey            = contextKey("netlify_id")
 	externalProviderTypeKey = contextKey("external_provider_type")
 	userKey                 = contextKey("user")
+	labelsKey               = contextKey("labels")
 	externalReferrerKey     = contextKey("external_referrer")
 	functionHooksKey        = contextKey("function_hooks")
 	adminUserKey            = contextKey("admin_user")
@@ -124,6 +125,20 @@ func getUser(ctx context.Context) *models.User {
 		return nil
 	}
 	return obj.(*models.User)
+}
+
+// withLabel adds the user label to the context.
+func withLabel(ctx context.Context, label *models.UserLabel) context.Context {
+	return context.WithValue(ctx, labelsKey, label)
+}
+
+// getLabel reads the user label from the context.
+func getLabel(ctx context.Context) *models.UserLabel {
+	obj := ctx.Value(labelsKey)
+	if obj == nil {
+		return nil
+	}
+	return obj.(*models.UserLabel)
 }
 
 // withSignature adds the provided request ID to the context.

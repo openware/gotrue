@@ -24,6 +24,8 @@ const (
 	UserRecoveryRequestedAction     AuditAction = "user_recovery_requested"
 	UserConfirmationRequestedAction AuditAction = "user_confirmation_requested"
 	UserRepeatedSignUpAction        AuditAction = "user_repeated_signup"
+	UserLabelCreatedAction          AuditAction = "user_label_created"
+	UserLabelModifiedAction         AuditAction = "user_label_modified"
 	TokenRevokedAction              AuditAction = "token_revoked"
 	TokenRefreshedAction            AuditAction = "token_refreshed"
 
@@ -40,12 +42,14 @@ var actionLogTypeMap = map[AuditAction]auditLogType{
 	UserSignedUpAction:              team,
 	UserInvitedAction:               team,
 	UserDeletedAction:               team,
-	TokenRevokedAction:              token,
-	TokenRefreshedAction:            token,
 	UserModifiedAction:              user,
 	UserRecoveryRequestedAction:     user,
 	UserConfirmationRequestedAction: user,
 	UserRepeatedSignUpAction:        user,
+	UserLabelCreatedAction:          user,
+	UserLabelModifiedAction:         user,
+	TokenRevokedAction:              token,
+	TokenRefreshedAction:            token,
 }
 
 // AuditLogEntry is the database model for audit log entries.
