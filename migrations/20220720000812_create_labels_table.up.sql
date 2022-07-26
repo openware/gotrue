@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS auth.labels (
 	id          :bigint          NOT NULL
 	user_id     :uuid            NOT NULL
-	label       enum(`email`,`asym-key`,`phone`,`address`,...)      NOT NULL
+	label       enum(`email`,`phone`,`profile`,`document`)  NOT NULL
 	state       enum(`unverified`,`pending`,`verified`,`expired`)   NOT NULL default `unverified`
 	created_at  timestamptz     NOT NULL
 	updated_at  timestamptz     NOT NULL
