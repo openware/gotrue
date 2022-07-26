@@ -127,18 +127,18 @@ func getUser(ctx context.Context) *models.User {
 	return obj.(*models.User)
 }
 
-// withLabel adds the user label to the context.
-func withLabel(ctx context.Context, label *models.UserLabel) context.Context {
-	return context.WithValue(ctx, labelsKey, label)
+// withLabels adds the user labels to the context.
+func withLabels(ctx context.Context, labels map[string]*models.UserLabel) context.Context {
+	return context.WithValue(ctx, labelsKey, labels)
 }
 
-// getLabel reads the user label from the context.
-func getLabel(ctx context.Context) *models.UserLabel {
+// getLabels reads the user labels from the context.
+func getLabels(ctx context.Context) map[string]*models.UserLabel {
 	obj := ctx.Value(labelsKey)
 	if obj == nil {
 		return nil
 	}
-	return obj.(*models.UserLabel)
+	return obj.(map[string]*models.UserLabel)
 }
 
 // withSignature adds the provided request ID to the context.

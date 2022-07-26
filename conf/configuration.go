@@ -184,7 +184,7 @@ type userLabel struct {
 	Labels []string `json:"labels"`
 }
 
-type UserLabels map[uint][]string
+type UserLabels []userLabel
 
 // Configuration holds all the per-instance configuration.
 type Configuration struct {
@@ -353,9 +353,9 @@ func (config *Configuration) ApplyDefaults() {
 
 	if len(config.UserLabels) == 0 {
 		config.UserLabels = UserLabels{
-			1: {"email", "phone"},
-			2: {"profile"},
-			3: {"documents"},
+			{Level: 1, Labels: []string{"email", "phone"}},
+			{Level: 2, Labels: []string{"profile"}},
+			{Level: 3, Labels: []string{"documents"}},
 		}
 	}
 
@@ -393,15 +393,9 @@ func (ul *UserLabels) Decode(value string) error {
 		return err
 	}
 
-	var decodedLabels []userLabel
-	err = json.Unmarshal([]byte(raw), &decodedLabels)
+	err = json.Unmarshal([]byte(raw), &ul)
 	if err != nil {
 		return err
-	}
-
-	ul = &UserLabels{}
-	for _, l := range decodedLabels {
-		(*ul)[l.Level] = l.Labels
 	}
 
 	return nil

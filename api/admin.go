@@ -354,17 +354,13 @@ type adminUserLabelsParams struct {
 func (a *API) loadUserLabels(w http.ResponseWriter, req *http.Request) (context.Context, error) {
 	ctx := req.Context()
 	user := getUser(ctx)
-	params, err := a.getAdminUserLabelsParams(req)
+
+	labels, err := models.FindUserLabels(a.db, user.ID)
 	if err != nil {
 		return ctx, internalServerError("Error loading user labels").WithInternalError(err)
 	}
 
-	label, err := models.FindUserLabel(a.db, user.ID, params.Label)
-	if err != nil {
-		return ctx, internalServerError("Error loading user labels").WithInternalError(err)
-	}
-
-	return withLabel(ctx, label), nil
+	return withLabels(ctx, labels), nil
 }
 
 func (a *API) getAdminUserLabelsParams(r *http.Request) (*adminUserLabelsParams, error) {
@@ -381,30 +377,50 @@ func (a *API) adminUserLabelCreateOrUpdate(w http.ResponseWriter, r *http.Reques
 	user := getUser(ctx)
 	instanceID := getInstanceID(ctx)
 	adminUser := getAdminUser(ctx)
-	existingLabel := getLabel(ctx)
+	existingLabels := getLabels(ctx)
 	params, err := a.getAdminUserLabelsParams(r)
-	if err != nil {
-		return err
-	}
+	config := a.getConfig(ctx)
 
 	err = a.db.Transaction(func(tx *storage.Connection) error {
+		// perform update
 		var action models.AuditAction
 
-		if existingLabel != nil {
+		if label, ok := existingLabels[params.Label]; ok {
 			action = models.UserLabelModifiedAction
 
-			if terr := existingLabel.UpdateState(tx, params.State); terr != nil {
+			if terr := label.UpdateState(tx, params.State); terr != nil {
 				return terr
 			}
 		} else {
 			action = models.UserLabelCreatedAction
-			label := models.NewUserLabel(user.ID, params.Label, params.State)
+			newLabel := models.NewUserLabel(user.ID, params.Label, params.State)
 
-			if terr := tx.Create(label); terr != nil {
+			if terr := tx.Create(newLabel); terr != nil {
 				return terr
 			}
+
+			existingLabels[newLabel.Label] = newLabel
 		}
 
+		// recalculate user level
+		newLevel := uint64(0)
+	levelsLoop:
+		for _, levelEntry := range config.UserLabels {
+			for _, label := range levelEntry.Labels {
+				if _, ok := existingLabels[label]; !ok {
+					break levelsLoop
+				}
+			}
+			newLevel++
+		}
+
+		if terr := user.UpdateUserMetaData(tx, map[string]interface{}{
+			models.UserLevelKey: newLevel,
+		}); terr != nil {
+			return terr
+		}
+
+		// display logs
 		if terr := models.NewAuditLogEntry(tx, instanceID, adminUser, action, map[string]interface{}{
 			"user_id":    user.ID,
 			"user_email": user.Email,

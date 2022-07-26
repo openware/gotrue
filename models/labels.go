@@ -7,6 +7,8 @@ import (
 	"github.com/netlify/gotrue/storage"
 )
 
+const UserLevelKey string = "level"
+
 type UserLabel struct {
 	ID        string    `json:"id" db:"id"`
 	UserID    uuid.UUID `json:"user_id" db:"user_id"`
@@ -14,11 +16,6 @@ type UserLabel struct {
 	State     string    `json:"state" db:"state"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-}
-
-func (UserLabel) TableName() string {
-	tableName := "labels"
-	return tableName
 }
 
 func NewUserLabel(userID uuid.UUID, label string, state string) *UserLabel {
@@ -30,20 +27,30 @@ func NewUserLabel(userID uuid.UUID, label string, state string) *UserLabel {
 	return userLabel
 }
 
+func (UserLabel) TableName() string {
+	tableName := "labels"
+	return tableName
+}
+
 // UpdateState updates the state column of a user label
 func (ul *UserLabel) UpdateState(tx *storage.Connection, state string) error {
 	ul.State = state
 	return tx.UpdateOnly(ul, "state")
 }
 
-// FindUserLabel finds a user labels matching the provided ID and label name
-func FindUserLabel(tx *storage.Connection, userID uuid.UUID, label string) (*UserLabel, error) {
-	res := &UserLabel{}
-	q := tx.Q().Where("user_id = ? AND label = ?", userID, label)
+// FindUserLabels finds all user labels matching the provided user ID
+func FindUserLabels(tx *storage.Connection, userID uuid.UUID) (map[string]*UserLabel, error) {
+	var labels []*UserLabel
 
-	err := q.First(res)
+	q := tx.Q().Where("user_id = ?", userID)
+	err := q.All(labels)
 	if err != nil {
 		return nil, err
+	}
+
+	res := make(map[string]*UserLabel)
+	for _, label := range labels {
+		res[label.Label] = label
 	}
 
 	return res, nil
