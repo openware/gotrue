@@ -379,7 +379,9 @@ func (a *API) adminUserLabelCreateOrUpdate(w http.ResponseWriter, r *http.Reques
 	adminUser := getAdminUser(ctx)
 	existingLabels := getLabels(ctx)
 	params, err := a.getAdminUserLabelsParams(r)
-	config := a.getConfig(ctx)
+	if err != nil {
+		return err
+	}
 
 	err = a.db.Transaction(func(tx *storage.Connection) error {
 		// perform update
@@ -400,24 +402,6 @@ func (a *API) adminUserLabelCreateOrUpdate(w http.ResponseWriter, r *http.Reques
 			}
 
 			existingLabels[newLabel.Label] = newLabel
-		}
-
-		// recalculate user level
-		newLevel := uint64(0)
-	levelsLoop:
-		for _, levelEntry := range config.UserLabels {
-			for _, label := range levelEntry.Labels {
-				if _, ok := existingLabels[label]; !ok {
-					break levelsLoop
-				}
-			}
-			newLevel++
-		}
-
-		if terr := user.UpdateUserMetaData(tx, map[string]interface{}{
-			models.UserLevelKey: newLevel,
-		}); terr != nil {
-			return terr
 		}
 
 		// display logs

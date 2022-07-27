@@ -3,11 +3,16 @@ package models
 import (
 	"time"
 
+	"github.com/gobuffalo/pop/v5"
 	"github.com/gofrs/uuid"
+	"github.com/netlify/gotrue/conf"
 	"github.com/netlify/gotrue/storage"
 )
 
-const UserLevelKey string = "level"
+const (
+	UserLevelKey string = "level"
+	configFile   string = ""
+)
 
 type UserLabel struct {
 	ID        string    `json:"id" db:"id"`
@@ -30,6 +35,45 @@ func NewUserLabel(userID uuid.UUID, label string, state string) *UserLabel {
 func (UserLabel) TableName() string {
 	tableName := "labels"
 	return tableName
+}
+
+// AfterSave is invoked afterk the user label is saved to
+// the database to recalculate the user level
+func (ul *UserLabel) AfterSave(tx *pop.Connection) error {
+	wrappedTx := &storage.Connection{Connection: tx}
+
+	config, err := conf.LoadConfig(configFile)
+	if err != nil {
+		return err
+	}
+
+	existingLabels, err := FindUserLabels(wrappedTx, ul.UserID)
+	if err != nil {
+		return err
+	}
+
+	user, err := FindUserByID(wrappedTx, ul.UserID)
+	if err != nil {
+		return err
+	}
+
+	newLevel := uint64(0)
+levelsLoop:
+	for _, levelEntry := range config.UserLabels {
+		for _, label := range levelEntry.Labels {
+			if _, ok := existingLabels[label]; !ok {
+				break levelsLoop
+			}
+		}
+		newLevel++
+	}
+
+	if terr := user.UpdateUserMetaData(wrappedTx, map[string]interface{}{
+		UserLevelKey: newLevel,
+	}); terr != nil {
+		return terr
+	}
+	return nil
 }
 
 // UpdateState updates the state column of a user label
