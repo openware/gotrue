@@ -68,7 +68,7 @@ func (a *API) adminUsers(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
-	sortParams, err := sort(r, map[string]bool{models.CreatedAt: true}, []models.SortField{models.SortField{Name: models.CreatedAt, Dir: models.Descending}})
+	sortParams, err := sort(r, map[string]bool{models.CreatedAt: true}, []models.SortField{{Name: models.CreatedAt, Dir: models.Descending}})
 	if err != nil {
 		return badRequestError("Bad Sort Parameters: %v", err)
 	}
@@ -372,19 +372,34 @@ func (a *API) getAdminUserLabelsParams(r *http.Request) (*adminUserLabelsParams,
 	return params, nil
 }
 
-func (a *API) adminUserLabelCreateOrUpdate(w http.ResponseWriter, r *http.Request) error {
+func (a *API) adminUserLabelsCreateOrUpdate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	user := getUser(ctx)
 	instanceID := getInstanceID(ctx)
 	adminUser := getAdminUser(ctx)
 	existingLabels := getLabels(ctx)
+	config := getConfig(ctx)
 	params, err := a.getAdminUserLabelsParams(r)
 	if err != nil {
 		return err
 	}
 
+	// check if requested label is in the list of configured labels
+	exists := false
+	for _, level := range config.UserLabels {
+		for _, label := range level.Labels {
+			if label == params.Label {
+				exists = true
+			}
+		}
+	}
+
+	if !exists {
+		return badRequestError("Label '%s' is not defined in the config", params.Label)
+	}
+
+	// perform update
 	err = a.db.Transaction(func(tx *storage.Connection) error {
-		// perform update
 		var action models.AuditAction
 
 		if label, ok := existingLabels[params.Label]; ok {
@@ -404,11 +419,10 @@ func (a *API) adminUserLabelCreateOrUpdate(w http.ResponseWriter, r *http.Reques
 			existingLabels[newLabel.Label] = newLabel
 		}
 
-		// display logs
 		if terr := models.NewAuditLogEntry(tx, instanceID, adminUser, action, map[string]interface{}{
-			"user_id":    user.ID,
-			"user_email": user.Email,
-			"user_phone": user.Phone,
+			"user_id":     user.ID,
+			"label_name":  params.Label,
+			"label_state": params.State,
 		}); terr != nil {
 			return internalServerError("Error recording audit log entry").WithInternalError(terr)
 		}

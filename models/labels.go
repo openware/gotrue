@@ -15,7 +15,7 @@ const (
 )
 
 type UserLabel struct {
-	ID        string    `json:"id" db:"id"`
+	ID        uuid.UUID `json:"id" db:"id"`
 	UserID    uuid.UUID `json:"user_id" db:"user_id"`
 	Label     string    `json:"label" db:"label"`
 	State     string    `json:"state" db:"state"`
@@ -87,7 +87,7 @@ func FindUserLabels(tx *storage.Connection, userID uuid.UUID) (map[string]*UserL
 	var labels []*UserLabel
 
 	q := tx.Q().Where("user_id = ?", userID)
-	err := q.All(labels)
+	err := q.All(&labels)
 	if err != nil {
 		return nil, err
 	}
