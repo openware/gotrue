@@ -44,7 +44,7 @@ func TestAdmin(t *testing.T) {
 }
 
 func (ts *AdminTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
+	_ = models.TruncateAll(ts.API.db)
 	ts.Config.External.Email.Enabled = true
 	ts.token = ts.makeSuperAdmin("")
 }
@@ -587,6 +587,8 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 		},
 	}
 
+	configBackup := *ts.Config
+
 	for _, c := range cases {
 		ts.Run(c.desc, func() {
 			// Initialize user data
@@ -603,6 +605,8 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 			require.Equal(ts.T(), c.expected, w.Code)
 		})
 	}
+
+	*ts.Config = configBackup
 }
 
 // TestAdminUserLabelsCreateOrUpdate tests API /admin/user/labels route (POST)

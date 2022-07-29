@@ -390,6 +390,7 @@ func (a *API) adminUserLabelsCreateOrUpdate(w http.ResponseWriter, r *http.Reque
 		for _, label := range level.Labels {
 			if label == params.Label {
 				exists = true
+				break
 			}
 		}
 	}
