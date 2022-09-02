@@ -2,8 +2,8 @@ package mailer
 
 import (
 	"fmt"
+	"net/mail"
 
-	"github.com/badoux/checkmail"
 	"github.com/netlify/gotrue/conf"
 	"github.com/netlify/gotrue/models"
 	"github.com/netlify/mailme"
@@ -52,12 +52,16 @@ const defaultEmailChangeMail = `<h2>Confirm email address change</h2>
 // ValidateEmail returns nil if the email is valid,
 // otherwise an error indicating the reason it is invalid
 func (m TemplateMailer) ValidateEmail(email string) error {
-	return checkmail.ValidateFormat(email)
+  _, err := mail.ParseAddress(email)
+  return err
 }
 
 // InviteMail sends a invite mail to a new user
 func (m *TemplateMailer) InviteMail(user *models.User, referrerURL string) error {
 	globalConfig, err := conf.LoadGlobal(configFile)
+	if err != nil {
+		return err
+	}
 
 	redirectParam := ""
 	if len(referrerURL) > 0 {
@@ -88,6 +92,9 @@ func (m *TemplateMailer) InviteMail(user *models.User, referrerURL string) error
 // ConfirmationMail sends a signup confirmation mail to a new user
 func (m *TemplateMailer) ConfirmationMail(user *models.User, referrerURL string) error {
 	globalConfig, err := conf.LoadGlobal(configFile)
+	if err != nil {
+		return err
+	}
 
 	redirectParam := ""
 	if len(referrerURL) > 0 {
@@ -193,6 +200,9 @@ func (m *TemplateMailer) EmailChangeMail(user *models.User, referrerURL string) 
 // RecoveryMail sends a password recovery mail
 func (m *TemplateMailer) RecoveryMail(user *models.User, referrerURL string) error {
 	globalConfig, err := conf.LoadGlobal(configFile)
+	if err != nil {
+		return err
+	}
 
 	redirectParam := ""
 	if len(referrerURL) > 0 {
@@ -223,6 +233,9 @@ func (m *TemplateMailer) RecoveryMail(user *models.User, referrerURL string) err
 // MagicLinkMail sends a login link mail
 func (m *TemplateMailer) MagicLinkMail(user *models.User, referrerURL string) error {
 	globalConfig, err := conf.LoadGlobal(configFile)
+	if err != nil {
+		return err
+	}
 
 	redirectParam := ""
 	if len(referrerURL) > 0 {
@@ -264,6 +277,9 @@ func (m TemplateMailer) Send(user *models.User, subject, body string, data map[s
 // GetEmailActionLink returns a magiclink, recovery or invite link based on the actionType passed.
 func (m TemplateMailer) GetEmailActionLink(user *models.User, actionType, referrerURL string) (string, error) {
 	globalConfig, err := conf.LoadGlobal(configFile)
+	if err != nil {
+		return "", err
+	}
 
 	redirectParam := ""
 	if len(referrerURL) > 0 {
