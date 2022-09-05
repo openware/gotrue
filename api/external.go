@@ -74,7 +74,7 @@ func (a *API) ExternalProviderRedirect(w http.ResponseWriter, r *http.Request) e
 		InviteToken: inviteToken,
 		Referrer:    redirectURL,
 	})
-	tokenString, err := token.SignedString(config.JWT.GetVerificationKey())
+	tokenString, err := token.SignedString(config.JWT.GetSigningKey())
 	if err != nil {
 		return internalServerError("Error creating state").WithInternalError(err)
 	}
