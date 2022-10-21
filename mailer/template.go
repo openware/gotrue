@@ -52,8 +52,8 @@ const defaultEmailChangeMail = `<h2>Confirm email address change</h2>
 // ValidateEmail returns nil if the email is valid,
 // otherwise an error indicating the reason it is invalid
 func (m TemplateMailer) ValidateEmail(email string) error {
-  _, err := mail.ParseAddress(email)
-  return err
+	_, err := mail.ParseAddress(email)
+	return err
 }
 
 // InviteMail sends a invite mail to a new user
@@ -74,6 +74,7 @@ func (m *TemplateMailer) InviteMail(user *models.User, referrerURL string) error
 	}
 	data := map[string]interface{}{
 		"SiteURL":         m.Config.SiteURL,
+		"ReferrerURL":     referrerURL,
 		"ConfirmationURL": url,
 		"Email":           user.Email,
 		"Token":           user.ConfirmationToken,
@@ -107,6 +108,7 @@ func (m *TemplateMailer) ConfirmationMail(user *models.User, referrerURL string)
 	}
 	data := map[string]interface{}{
 		"SiteURL":         m.Config.SiteURL,
+		"ReferrerURL":     referrerURL,
 		"ConfirmationURL": url,
 		"Email":           user.Email,
 		"Token":           user.ConfirmationToken,
@@ -171,6 +173,7 @@ func (m *TemplateMailer) EmailChangeMail(user *models.User, referrerURL string) 
 		go func(address, token, template string) {
 			data := map[string]interface{}{
 				"SiteURL":         m.Config.SiteURL,
+				"ReferrerURL":     referrerURL,
 				"ConfirmationURL": url,
 				"Email":           user.GetEmail(),
 				"NewEmail":        user.EmailChange,
@@ -215,6 +218,7 @@ func (m *TemplateMailer) RecoveryMail(user *models.User, referrerURL string) err
 	}
 	data := map[string]interface{}{
 		"SiteURL":         m.Config.SiteURL,
+		"ReferrerURL":     referrerURL,
 		"ConfirmationURL": url,
 		"Email":           user.Email,
 		"Token":           user.RecoveryToken,
@@ -248,6 +252,7 @@ func (m *TemplateMailer) MagicLinkMail(user *models.User, referrerURL string) er
 	}
 	data := map[string]interface{}{
 		"SiteURL":         m.Config.SiteURL,
+		"ReferrerURL":     referrerURL,
 		"ConfirmationURL": url,
 		"Email":           user.Email,
 		"Token":           user.RecoveryToken,
