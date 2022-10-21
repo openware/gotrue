@@ -51,7 +51,9 @@ func (a *API) ListenAndServe(hostAndPort string) {
 		waitForTermination(log, done)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		server.Shutdown(ctx)
+		if err := server.Shutdown(ctx); err != nil {
+			log.WithError(err).Fatal("http server shutdown failed")
+		}
 	}()
 
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
@@ -166,6 +168,12 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 					r.Get("/", api.adminUserGet)
 					r.Put("/", api.adminUserUpdate)
 					r.Delete("/", api.adminUserDelete)
+
+					r.Route("/labels", func(r *router) {
+						r.Use(api.loadUserLabels)
+
+						r.Post("/", api.adminUserLabelsCreateOrUpdate)
+					})
 				})
 			})
 

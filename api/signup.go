@@ -98,6 +98,11 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			if err := user.UpdateUserMetaData(tx, params.Data); err != nil {
 				return internalServerError("Database error updating user").WithInternalError(err)
 			}
+
+			label := models.NewUserLabel(user.ID, params.Provider, "verified")
+			if terr := tx.Create(label); terr != nil {
+				return internalServerError("Database error creating user label").WithInternalError(terr)
+			}
 		} else {
 			user, terr = a.signupNewUser(ctx, tx, params)
 			if terr != nil {

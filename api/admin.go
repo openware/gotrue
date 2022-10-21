@@ -68,7 +68,7 @@ func (a *API) adminUsers(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
-	sortParams, err := sort(r, map[string]bool{models.CreatedAt: true}, []models.SortField{models.SortField{Name: models.CreatedAt, Dir: models.Descending}})
+	sortParams, err := sort(r, map[string]bool{models.CreatedAt: true}, []models.SortField{{Name: models.CreatedAt, Dir: models.Descending}})
 	if err != nil {
 		return badRequestError("Bad Sort Parameters: %v", err)
 	}
@@ -344,4 +344,91 @@ func (a *API) adminUserDelete(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return sendJSON(w, http.StatusOK, map[string]interface{}{})
+}
+
+type adminUserLabelsParams struct {
+	Label string `json:"label"`
+	State string `json:"state"`
+}
+
+func (a *API) loadUserLabels(w http.ResponseWriter, req *http.Request) (context.Context, error) {
+	ctx := req.Context()
+	user := getUser(ctx)
+
+	labels, err := models.FindUserLabels(a.db, user.ID)
+	if err != nil {
+		return ctx, internalServerError("Error loading user labels").WithInternalError(err)
+	}
+
+	return withLabels(ctx, labels), nil
+}
+
+func (a *API) getAdminUserLabelsParams(r *http.Request) (*adminUserLabelsParams, error) {
+	params := &adminUserLabelsParams{}
+	err := json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		return nil, badRequestError("Could not decode admin user label params: %v", err)
+	}
+	return params, nil
+}
+
+func (a *API) adminUserLabelsCreateOrUpdate(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	user := getUser(ctx)
+	instanceID := getInstanceID(ctx)
+	adminUser := getAdminUser(ctx)
+	existingLabels := getLabels(ctx)
+	config := getConfig(ctx)
+	params, err := a.getAdminUserLabelsParams(r)
+	if err != nil {
+		return err
+	}
+
+	// check if requested label is in the list of configured labels
+	exists := false
+	for _, level := range config.UserLabels {
+		for _, label := range level.Labels {
+			if label == params.Label {
+				exists = true
+				break
+			}
+		}
+	}
+
+	if !exists {
+		return badRequestError("Label '%s' is not defined in the config", params.Label)
+	}
+
+	// perform update
+	err = a.db.Transaction(func(tx *storage.Connection) error {
+		var action models.AuditAction
+
+		if label, ok := existingLabels[params.Label]; ok {
+			action = models.UserLabelModifiedAction
+
+			if terr := label.UpdateState(tx, params.State); terr != nil {
+				return terr
+			}
+		} else {
+			action = models.UserLabelCreatedAction
+			newLabel := models.NewUserLabel(user.ID, params.Label, params.State)
+
+			if terr := tx.Create(newLabel); terr != nil {
+				return terr
+			}
+
+			existingLabels[newLabel.Label] = newLabel
+		}
+
+		if terr := models.NewAuditLogEntry(tx, instanceID, adminUser, action, map[string]interface{}{
+			"user_id":     user.ID,
+			"label_name":  params.Label,
+			"label_state": params.State,
+		}); terr != nil {
+			return internalServerError("Error recording audit log entry").WithInternalError(terr)
+		}
+		return nil
+	})
+
+	return err
 }

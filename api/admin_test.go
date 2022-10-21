@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -43,7 +44,7 @@ func TestAdmin(t *testing.T) {
 }
 
 func (ts *AdminTestSuite) SetupTest() {
-	models.TruncateAll(ts.API.db)
+	_ = models.TruncateAll(ts.API.db)
 	ts.Config.External.Email.Enabled = true
 	ts.token = ts.makeSuperAdmin("")
 }
@@ -53,7 +54,6 @@ func (ts *AdminTestSuite) makeSuperAdmin(email string) string {
 	require.NoError(ts.T(), err, "Error making new user")
 
 	u.Role = "supabase_admin"
-
 
 	key, err := models.FindMainAsymmetricKeyByUser(ts.API.db, u)
 	require.NoError(ts.T(), err, "Error finding keys")
@@ -587,6 +587,8 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 		},
 	}
 
+	configBackup := *ts.Config
+
 	for _, c := range cases {
 		ts.Run(c.desc, func() {
 			// Initialize user data
@@ -601,6 +603,93 @@ func (ts *AdminTestSuite) TestAdminUserCreateWithDisabledLogin() {
 			*ts.Config = *c.customConfig
 			ts.API.handler.ServeHTTP(w, req)
 			require.Equal(ts.T(), c.expected, w.Code)
+		})
+	}
+
+	*ts.Config = configBackup
+}
+
+// TestAdminUserLabelsCreateOrUpdate tests API /admin/user/labels route (POST)
+func (ts *AdminTestSuite) TestAdminUserLabelsCreateOrUpdate() {
+	cases := []struct {
+		desc     string
+		params   map[string]interface{}
+		expected map[string]interface{}
+	}{
+		{
+			desc: "Create new label",
+			params: map[string]interface{}{
+				"label": "email",
+				"state": "pending",
+			},
+			expected: map[string]interface{}{
+				"httpStatusCode": http.StatusOK,
+				"new_labels":     1,
+			},
+		},
+		{
+			desc: "Update existing label",
+			params: map[string]interface{}{
+				"label": "email",
+				"state": "verified",
+			},
+			expected: map[string]interface{}{
+				"httpStatusCode": http.StatusOK,
+				"new_labels":     0,
+			},
+		},
+		{
+			desc: "Label does not exist",
+			params: map[string]interface{}{
+				"label": "test",
+				"state": "verified",
+			},
+			expected: map[string]interface{}{
+				"httpStatusCode": http.StatusBadRequest,
+				"new_labels":     0,
+			},
+		},
+	}
+
+	for _, c := range cases {
+		ts.Run(c.desc, func() {
+			var buffer bytes.Buffer
+			require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(c.params))
+
+			u, err := models.NewUser(ts.instanceID, "test1@example.com", "test", ts.Config.JWT.Aud, nil)
+			require.NoError(ts.T(), err, "Error making new user")
+			if err := ts.API.db.Create(u); err != nil {
+				u, err = models.FindUserByEmailAndAudience(ts.API.db, ts.instanceID, "test1@example.com", ts.Config.JWT.Aud)
+				require.NoError(ts.T(), err, "Error finding user")
+			}
+
+			beforeLabels, err := models.FindUserLabels(ts.API.db, u.ID)
+			require.NoError(ts.T(), err, "Error loading user labels")
+
+			// Setup request
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/admin/users/%v/labels", u.ID), &buffer)
+
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ts.token))
+			ts.Config.External.Phone.Enabled = true
+
+			ts.API.handler.ServeHTTP(w, req)
+			require.Equal(ts.T(), c.expected["httpStatusCode"], w.Code)
+
+			// verify request results
+			afterLabels, err := models.FindUserLabels(ts.API.db, u.ID)
+			require.NoError(ts.T(), err, "Error loading user labels")
+
+			labelsDelta := len(beforeLabels) - len(afterLabels)
+			require.Equal(ts.T(), int(math.Abs(float64(labelsDelta))),
+				c.expected["new_labels"].(int),
+				fmt.Sprintf("Expected %d label", c.expected["new_labels"]))
+
+			if c.expected["new_labels"].(int) > 0 {
+				labelName := c.params["label"].(string)
+				require.Equal(ts.T(), afterLabels[labelName].Label, labelName)
+				require.Equal(ts.T(), afterLabels[labelName].State, c.params["state"].(string))
+			}
 		})
 	}
 }

@@ -179,6 +179,13 @@ type SecurityConfiguration struct {
 	RefreshTokenRotationEnabled bool                 `json:"refresh_token_rotation_enabled" split_words:"true" default:"true"`
 }
 
+type userLabel struct {
+	Level  uint     `json:"level"`
+	Labels []string `json:"labels"`
+}
+
+type UserLabels []userLabel
+
 // Configuration holds all the per-instance configuration.
 type Configuration struct {
 	SiteURL             string                   `json:"site_url" split_words:"true" required:"true"`
@@ -198,6 +205,7 @@ type Configuration struct {
 		Domain   string `json:"domain"`
 		Duration int    `json:"duration"`
 	} `json:"cookies"`
+	UserLabels UserLabels `json:"user_labels" split_words:"true"`
 }
 
 func loadEnvironment(filename string) error {
@@ -343,6 +351,14 @@ func (config *Configuration) ApplyDefaults() {
 		config.PasswordMinLength = defaultMinPasswordLength
 	}
 
+	if len(config.UserLabels) == 0 {
+		config.UserLabels = UserLabels{
+			{Level: 1, Labels: []string{"email", "phone"}},
+			{Level: 2, Labels: []string{"profile"}},
+			{Level: 3, Labels: []string{"documents"}},
+		}
+	}
+
 	config.JWT.InitializeSigningSecret()
 }
 
@@ -369,6 +385,20 @@ func (config *Configuration) Scan(src interface{}) error {
 		source = []byte("{}")
 	}
 	return json.Unmarshal(source, &config)
+}
+
+func (ul *UserLabels) Decode(value string) error {
+	raw, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal([]byte(raw), &ul)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (o *OAuthProviderConfiguration) Validate() error {

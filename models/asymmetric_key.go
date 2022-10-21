@@ -3,13 +3,14 @@ package models
 import (
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gofrs/uuid"
 	"github.com/netlify/gotrue/storage"
 	"github.com/pkg/errors"
-	"time"
 )
 
 const challengeTokenExpirationDuration = 30 * time.Minute
@@ -140,7 +141,7 @@ func (a *AsymmetricKey) verifyEthKeySignature(rawSignature string) error {
 	return nil
 }
 
-// verifyKeyAndAlgorithm verifies public key format for specific algorithm.
+// VerifyKeyAndAlgorithm verifies public key format for specific algorithm.
 // If key satisfies conditions, nil is returned
 func VerifyKeyAndAlgorithm(pubkey, algorithm string) error {
 	var err error
