@@ -576,8 +576,8 @@ func (a *API) issueRefreshToken(ctx context.Context, conn *storage.Connection, u
 // setCookieTokens sets the access_token & refresh_token in the cookies
 func (a *API) setCookieTokens(config *conf.Configuration, token *AccessTokenResponse, session bool, w http.ResponseWriter) error {
 	// don't need to catch error here since we always set the cookie name
-	_ = a.setCookieToken(config, "access-token", token.Token, session, w)
-	_ = a.setCookieToken(config, "refresh-token", token.RefreshToken, session, w)
+	_ = a.setCookieToken(config, "sb-access-token", token.Token, session, w)
+	_ = a.setCookieToken(config, "sb-refresh-token", token.RefreshToken, session, w)
 	return nil
 }
 
@@ -605,8 +605,8 @@ func (a *API) setCookieToken(config *conf.Configuration, name string, tokenStrin
 }
 
 func (a *API) clearCookieTokens(config *conf.Configuration, w http.ResponseWriter) {
-	a.clearCookieToken(config, "access-token", w)
-	a.clearCookieToken(config, "refresh-token", w)
+	a.clearCookieToken(config, "sb-access-token", w)
+	a.clearCookieToken(config, "sb-refresh-token", w)
 }
 
 func (a *API) clearCookieToken(config *conf.Configuration, name string, w http.ResponseWriter) {
