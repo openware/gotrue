@@ -9,12 +9,13 @@ import (
 
 	"github.com/fatih/structs"
 	"github.com/gofrs/uuid"
+	"github.com/pkg/errors"
+
 	"github.com/netlify/gotrue/api/provider"
 	"github.com/netlify/gotrue/api/sms_provider"
 	"github.com/netlify/gotrue/metering"
 	"github.com/netlify/gotrue/models"
 	"github.com/netlify/gotrue/storage"
-	"github.com/pkg/errors"
 )
 
 // SignupParams are the parameters the Signup endpoint accepts
@@ -315,11 +316,25 @@ func (a *API) signupNewUser(ctx context.Context, conn *storage.Connection, param
 
 	err = conn.Transaction(func(tx *storage.Connection) error {
 		var terr error
+		userExist, terr := models.AnyUser(tx)
+
+		if terr != nil {
+			return terr
+		}
+
 		if terr = tx.Create(user); terr != nil {
 			return internalServerError("Database error saving new user").WithInternalError(terr)
 		}
-		if terr = user.SetRole(tx, config.JWT.DefaultGroupName); terr != nil {
-			return internalServerError("Database error updating user").WithInternalError(terr)
+
+		if config.FirstUserSuperAdmin && !userExist {
+			terr = user.SetRole(tx, "superadmin")
+			if terr != nil {
+				return terr
+			}
+		} else {
+			if terr = user.SetRole(tx, config.JWT.DefaultGroupName); terr != nil {
+				return internalServerError("Database error updating user").WithInternalError(terr)
+			}
 		}
 		if terr = triggerEventHooks(ctx, tx, ValidateEvent, user, config); terr != nil {
 			return terr

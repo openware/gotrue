@@ -65,7 +65,7 @@ func (a *API) ExternalProviderRedirect(w http.ResponseWriter, r *http.Request) e
 	log := observability.GetLogEntry(r)
 	log.WithField("provider", providerType).Info("Redirecting to external provider")
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, ExternalProviderClaims{
+	token := jwt.NewWithClaims(config.JWT.GetSigningMethod(), ExternalProviderClaims{
 		NetlifyMicroserviceClaims: NetlifyMicroserviceClaims{
 			StandardClaims: jwt.StandardClaims{
 				ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
@@ -77,7 +77,7 @@ func (a *API) ExternalProviderRedirect(w http.ResponseWriter, r *http.Request) e
 		InviteToken: inviteToken,
 		Referrer:    redirectURL,
 	})
-	tokenString, err := token.SignedString([]byte(config.JWT.Secret))
+	tokenString, err := token.SignedString(config.JWT.GetSigningKey())
 	if err != nil {
 		return internalServerError("Error creating state").WithInternalError(err)
 	}
@@ -424,9 +424,9 @@ func (a *API) processInvite(r *http.Request, ctx context.Context, tx *storage.Co
 func (a *API) loadExternalState(ctx context.Context, state string) (context.Context, error) {
 	config := a.config
 	claims := ExternalProviderClaims{}
-	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
+	p := jwt.Parser{ValidMethods: []string{config.JWT.Algorithm}}
 	_, err := p.ParseWithClaims(state, &claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.JWT.Secret), nil
+		return config.JWT.GetVerificationKey(), nil
 	})
 	if err != nil || claims.Provider == "" {
 		return nil, badRequestError("OAuth state is invalid: %v", err)

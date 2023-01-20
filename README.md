@@ -395,13 +395,17 @@ by default.
 
 ```properties
 GOTRUE_JWT_SECRET=supersecretvalue
+GOTRUE_JWT_ALGORITHM=RS256
 GOTRUE_JWT_EXP=3600
 GOTRUE_JWT_AUD=netlify
 ```
+`JWT_ALGORITHM` - `string`
+
+The signing algorithm for the JWT. Defaults to HS256.
 
 `JWT_SECRET` - `string` **required**
 
-The secret used to sign JWT tokens with.
+The secret used to sign JWT tokens with. If signing alogrithm is RS256, secret has to be Base64 encoded RSA private key.
 
 `JWT_EXP` - `number`
 

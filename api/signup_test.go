@@ -13,11 +13,12 @@ import (
 
 	"github.com/gofrs/uuid"
 	jwt "github.com/golang-jwt/jwt"
-	"github.com/netlify/gotrue/conf"
-	"github.com/netlify/gotrue/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/netlify/gotrue/conf"
+	"github.com/netlify/gotrue/models"
 )
 
 type SignupTestSuite struct {
@@ -111,7 +112,7 @@ func (ts *SignupTestSuite) TestWebhookTriggered() {
 		u, ok := data["user"].(map[string]interface{})
 		require.True(ok)
 		assert.Equal("authenticated", u["aud"])
-		assert.Equal("authenticated", u["role"])
+		assert.Equal("superadmin", u["role"])
 		assert.Equal("test@example.com", u["email"])
 
 		appmeta, ok := u["app_metadata"].(map[string]interface{})
