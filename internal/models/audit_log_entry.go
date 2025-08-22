@@ -33,6 +33,7 @@ const (
 	UserConfirmationRequestedAction AuditAction = "user_confirmation_requested"
 	UserRepeatedSignUpAction        AuditAction = "user_repeated_signup"
 	UserUpdatePasswordAction        AuditAction = "user_updated_password"
+	UserAsymmetricVerifyAction      AuditAction = "user_asymmetric_verified"
 	TokenRevokedAction              AuditAction = "token_revoked"
 	TokenRefreshedAction            AuditAction = "token_refreshed"
 	GenerateRecoveryCodesAction     AuditAction = "generate_recovery_codes"
@@ -101,6 +102,10 @@ func NewAuditLogEntry(config conf.AuditLogConfiguration, r *http.Request, tx *st
 
 	if actor.GetPhone() != "" {
 		username = actor.GetPhone()
+	}
+
+	if actor.GetAsymmetricAddress() != "" {
+		username = actor.GetAsymmetricAddress()
 	}
 
 	payload := map[string]interface{}{

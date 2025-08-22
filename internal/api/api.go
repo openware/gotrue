@@ -40,6 +40,8 @@ type API struct {
 	hibpClient  *hibp.PwnedClient
 	oauthServer *oauthserver.Server
 
+	ats *AsymmetricTokenStorage
+
 	// overrideTime can be used to override the clock used by handlers. Should only be used in tests!
 	overrideTime func() time.Time
 
@@ -87,6 +89,10 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 		db:          db,
 		version:     version,
 		oauthServer: oauthserver.NewServer(globalConfig, db),
+	}
+
+	if globalConfig.External.Asymmetric.Enabled && !globalConfig.DisableSignup {
+		api.ats = NewAsymmetricTokenStorage()
 	}
 
 	for _, o := range opt {
@@ -174,7 +180,7 @@ func NewAPIWithVersion(globalConfig *conf.GlobalConfiguration, db *storage.Conne
 				if err := retrieveRequestParams(r, params); err != nil {
 					return err
 				}
-				if params.Email == "" && params.Phone == "" {
+				if params.Email == "" && params.Phone == "" && params.AsymmetricAddress == "" {
 					if !api.config.External.AnonymousUsers.Enabled {
 						return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeAnonymousProviderDisabled, "Anonymous sign-ins are disabled")
 					}

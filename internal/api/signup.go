@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -21,6 +22,7 @@ type SignupParams struct {
 	Email               string                 `json:"email"`
 	Phone               string                 `json:"phone"`
 	Password            string                 `json:"password"`
+	AsymmetricAddress   string                 `json:"asymmetric_address"`
 	Data                map[string]interface{} `json:"data"`
 	Provider            string                 `json:"-"`
 	Aud                 string                 `json:"-"`
@@ -31,6 +33,12 @@ type SignupParams struct {
 
 func (a *API) validateSignupParams(ctx context.Context, p *SignupParams) error {
 	config := a.config
+
+	if p.AsymmetricAddress != "" && (p.Password != "" || p.Email != "" || p.Phone != "") {
+		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Signup cannot include both asymmetric address and email/phone")
+	} else if p.AsymmetricAddress != "" {
+		return nil // skip further validation
+	}
 
 	if p.Password == "" {
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Signup requires a valid password")
@@ -61,6 +69,8 @@ func (p *SignupParams) ConfigureDefaults() {
 		p.Provider = "email"
 	} else if p.Phone != "" {
 		p.Provider = "phone"
+	} else if p.AsymmetricAddress != "" {
+		p.Provider = "asymmetric"
 	}
 	if p.Data == nil {
 		p.Data = make(map[string]interface{})
@@ -78,6 +88,8 @@ func (params *SignupParams) ToUserModel(isSSOUser bool) (user *models.User, err 
 		user, err = models.NewUser("", params.Email, params.Password, params.Aud, params.Data)
 	case "phone":
 		user, err = models.NewUser(params.Phone, "", params.Password, params.Aud, params.Data)
+	case "asymmetric":
+		user, err = models.NewUserWithAsymmetricAddress(params.AsymmetricAddress, params.Aud, params.Data)
 	case "anonymous":
 		user, err = models.NewUser("", "", "", params.Aud, params.Data)
 		user.IsAnonymous = true
@@ -156,6 +168,15 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		user, err = models.FindUserByPhoneAndAudience(db, params.Phone, params.Aud)
+	case "asymmetric":
+		if !config.External.Asymmetric.Enabled {
+			return apierrors.NewBadRequestError(apierrors.ErrorCodeAsymmetricProviderDisabled, "Asymmetric signups are disabled")
+		}
+		params.AsymmetricAddress, err = a.validateAsymmetricAddress(params.AsymmetricAddress)
+		if err != nil {
+			return err
+		}
+		user, err = models.FindUserByAsymmetricAddressAndAudience(db, params.AsymmetricAddress, params.Aud)
 	default:
 		msg := ""
 		if config.External.Email.Enabled && config.External.Phone.Enabled {
@@ -165,7 +186,7 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 		} else if config.External.Phone.Enabled {
 			msg = "Sign up only available with phone provider"
 		} else {
-			msg = "Sign up with this provider not possible"
+			msg = fmt.Sprintf("Sign up with this (%s) provider not possible", params.Provider)
 		}
 
 		return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, msg)
@@ -224,6 +245,14 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			}
 		}
 		user.Identities = []models.Identity{*identity}
+
+		if params.Provider == "asymmetric" {
+			if terr = models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserSignedUpAction, "", map[string]interface{}{
+				"provider": params.Provider,
+			}); terr != nil {
+				return terr
+			}
+		}
 
 		if params.Provider == "email" && !user.IsConfirmed() {
 			if config.Mailer.Autoconfirm {
@@ -300,6 +329,21 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 			return sendJSON(w, http.StatusOK, sanitizedUser)
 		}
 		return err
+	}
+
+	// It's impossible to "confirm" asymmetric signups, that's why it will always send a challenge token
+	if params.Provider == "asymmetric" {
+		challengeToken, err := a.generateAsymmetricToken()
+		if err != nil {
+			return err
+		}
+
+		a.setAsymmetricAddressForToken(challengeToken, user.AsymmetricAddress.String())
+
+		sendJSON(w, http.StatusOK, AsymmetricSignupResponse{
+			ChallengeToken: challengeToken,
+		})
+		return nil
 	}
 
 	// handles case where Mailer.Autoconfirm is true or Phone.Autoconfirm is true

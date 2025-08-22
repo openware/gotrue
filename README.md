@@ -865,6 +865,22 @@ Returns:
 }
 ```
 
+Register a new user with a asymmetric key.
+
+```js
+{
+  "asymmetric_address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+}
+```
+
+Returns:
+
+```js
+{
+  "challenge_token": "11111111-2222-3333-4444-5555555555555",
+}
+```
+
 if AUTOCONFIRM is enabled and the sign up is a duplicate, then the endpoint will return:
 
 ```json
@@ -966,6 +982,27 @@ Verify a phone signup or sms otp. Type should be set to `sms`.
   "token": "confirmation-otp-delivered-in-sms",
   "redirect_to": "https://supabase.io",
   "phone": "phone-number-sms-otp-was-delivered-to"
+}
+```
+
+Returns:
+
+```json
+{
+  "access_token": "jwt-token-representing-the-user",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "refresh_token": "a-refresh-token"
+}
+```
+
+Verify a asymmetric signup.
+
+```json
+{
+  "type": "asymmetric_signup",
+  "token": "confirmation-otp-delivered-in-sms",
+  "asymmetric_signature": "hex-encoded-signature",
 }
 ```
 
