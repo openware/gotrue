@@ -340,10 +340,9 @@ func (a *API) Signup(w http.ResponseWriter, r *http.Request) error {
 
 		a.setAsymmetricAddressForToken(challengeToken, user.AsymmetricAddress.String())
 
-		sendJSON(w, http.StatusOK, AsymmetricSignupResponse{
+		return sendJSON(w, http.StatusOK, AsymmetricSignupResponse{
 			ChallengeToken: challengeToken,
 		})
-		return nil
 	}
 
 	// handles case where Mailer.Autoconfirm is true or Phone.Autoconfirm is true
