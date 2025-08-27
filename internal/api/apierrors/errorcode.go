@@ -36,6 +36,7 @@ const (
 	ErrorCodeIdentityAlreadyExists             ErrorCode = "identity_already_exists"
 	ErrorCodeEmailProviderDisabled             ErrorCode = "email_provider_disabled"
 	ErrorCodePhoneProviderDisabled             ErrorCode = "phone_provider_disabled"
+	ErrorCodeAsymmetricProviderDisabled        ErrorCode = "asymmetric_provider_disabled"
 	ErrorCodeTooManyEnrolledMFAFactors         ErrorCode = "too_many_enrolled_mfa_factors"
 	ErrorCodeMFAFactorNameConflict             ErrorCode = "mfa_factor_name_conflict"
 	ErrorCodeMFAFactorNotFound                 ErrorCode = "mfa_factor_not_found"
@@ -97,4 +98,5 @@ const (
 	ErrorCodeWeb3UnsupportedChain                   ErrorCode = "web3_unsupported_chain"
 	ErrorCodeOAuthDynamicClientRegistrationDisabled ErrorCode = "oauth_dynamic_client_registration_disabled"
 	ErrorCodeEmailAddressNotProvided                ErrorCode = "email_address_not_provided"
+	ErrorCodeAsymmetricSignatureInvalid             ErrorCode = "asymmetric_signature_invalid"
 )

@@ -330,37 +330,38 @@ type EmailContentConfiguration struct {
 }
 
 type ProviderConfiguration struct {
-	AnonymousUsers          AnonymousProviderConfiguration `json:"anonymous_users" split_words:"true"`
-	Apple                   OAuthProviderConfiguration     `json:"apple"`
-	Azure                   OAuthProviderConfiguration     `json:"azure"`
-	Bitbucket               OAuthProviderConfiguration     `json:"bitbucket"`
-	Discord                 OAuthProviderConfiguration     `json:"discord"`
-	Facebook                OAuthProviderConfiguration     `json:"facebook"`
-	Snapchat                OAuthProviderConfiguration     `json:"snapchat"`
-	Figma                   OAuthProviderConfiguration     `json:"figma"`
-	Fly                     OAuthProviderConfiguration     `json:"fly"`
-	Github                  OAuthProviderConfiguration     `json:"github"`
-	Gitlab                  OAuthProviderConfiguration     `json:"gitlab"`
-	Google                  OAuthProviderConfiguration     `json:"google"`
-	Kakao                   OAuthProviderConfiguration     `json:"kakao"`
-	Notion                  OAuthProviderConfiguration     `json:"notion"`
-	Keycloak                OAuthProviderConfiguration     `json:"keycloak"`
-	Linkedin                OAuthProviderConfiguration     `json:"linkedin"`
-	LinkedinOIDC            OAuthProviderConfiguration     `json:"linkedin_oidc" envconfig:"LINKEDIN_OIDC"`
-	Spotify                 OAuthProviderConfiguration     `json:"spotify"`
-	Slack                   OAuthProviderConfiguration     `json:"slack"`
-	SlackOIDC               OAuthProviderConfiguration     `json:"slack_oidc" envconfig:"SLACK_OIDC"`
-	Twitter                 OAuthProviderConfiguration     `json:"twitter"`
-	Twitch                  OAuthProviderConfiguration     `json:"twitch"`
-	VercelMarketplace       OAuthProviderConfiguration     `json:"vercel_marketplace" split_words:"true"`
-	WorkOS                  OAuthProviderConfiguration     `json:"workos"`
-	Email                   EmailProviderConfiguration     `json:"email"`
-	Phone                   PhoneProviderConfiguration     `json:"phone"`
-	Zoom                    OAuthProviderConfiguration     `json:"zoom"`
-	IosBundleId             string                         `json:"ios_bundle_id" split_words:"true"`
-	RedirectURL             string                         `json:"redirect_url"`
-	AllowedIdTokenIssuers   []string                       `json:"allowed_id_token_issuers" split_words:"true"`
-	FlowStateExpiryDuration time.Duration                  `json:"flow_state_expiry_duration" split_words:"true"`
+	AnonymousUsers          AnonymousProviderConfiguration  `json:"anonymous_users" split_words:"true"`
+	Apple                   OAuthProviderConfiguration      `json:"apple"`
+	Azure                   OAuthProviderConfiguration      `json:"azure"`
+	Bitbucket               OAuthProviderConfiguration      `json:"bitbucket"`
+	Discord                 OAuthProviderConfiguration      `json:"discord"`
+	Facebook                OAuthProviderConfiguration      `json:"facebook"`
+	Snapchat                OAuthProviderConfiguration      `json:"snapchat"`
+	Figma                   OAuthProviderConfiguration      `json:"figma"`
+	Fly                     OAuthProviderConfiguration      `json:"fly"`
+	Github                  OAuthProviderConfiguration      `json:"github"`
+	Gitlab                  OAuthProviderConfiguration      `json:"gitlab"`
+	Google                  OAuthProviderConfiguration      `json:"google"`
+	Kakao                   OAuthProviderConfiguration      `json:"kakao"`
+	Notion                  OAuthProviderConfiguration      `json:"notion"`
+	Keycloak                OAuthProviderConfiguration      `json:"keycloak"`
+	Linkedin                OAuthProviderConfiguration      `json:"linkedin"`
+	LinkedinOIDC            OAuthProviderConfiguration      `json:"linkedin_oidc" envconfig:"LINKEDIN_OIDC"`
+	Spotify                 OAuthProviderConfiguration      `json:"spotify"`
+	Slack                   OAuthProviderConfiguration      `json:"slack"`
+	SlackOIDC               OAuthProviderConfiguration      `json:"slack_oidc" envconfig:"SLACK_OIDC"`
+	Twitter                 OAuthProviderConfiguration      `json:"twitter"`
+	Twitch                  OAuthProviderConfiguration      `json:"twitch"`
+	VercelMarketplace       OAuthProviderConfiguration      `json:"vercel_marketplace" split_words:"true"`
+	WorkOS                  OAuthProviderConfiguration      `json:"workos"`
+	Email                   EmailProviderConfiguration      `json:"email"`
+	Phone                   PhoneProviderConfiguration      `json:"phone"`
+	Asymmetric              AsymmetricProviderConfiguration `json:"asymmetric"`
+	Zoom                    OAuthProviderConfiguration      `json:"zoom"`
+	IosBundleId             string                          `json:"ios_bundle_id" split_words:"true"`
+	RedirectURL             string                          `json:"redirect_url"`
+	AllowedIdTokenIssuers   []string                        `json:"allowed_id_token_issuers" split_words:"true"`
+	FlowStateExpiryDuration time.Duration                   `json:"flow_state_expiry_duration" split_words:"true"`
 
 	Web3Solana   SolanaConfiguration   `json:"web3_solana" split_words:"true"`
 	Web3Ethereum EthereumConfiguration `json:"web3_ethereum" split_words:"true"`
@@ -489,6 +490,10 @@ func (c *MailerConfiguration) GetEmailValidationBlockedMXRecords() map[string]bo
 
 type PhoneProviderConfiguration struct {
 	Enabled bool `json:"enabled" default:"false"`
+}
+
+type AsymmetricProviderConfiguration struct {
+	Enabled bool `json:"enabled" default:"true"`
 }
 
 type SmsProviderConfiguration struct {

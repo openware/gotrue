@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/fatih/structs"
 	"github.com/sethvargo/go-password/password"
 	"github.com/supabase/auth/internal/api/apierrors"
@@ -24,8 +25,9 @@ import (
 )
 
 const (
-	smsVerification         = "sms"
-	phoneChangeVerification = "phone_change"
+	smsVerification              = "sms"
+	phoneChangeVerification      = "phone_change"
+	asymmetricSignupVerification = "asymmetric_signup"
 	// includes signupVerification and magicLinkVerification
 )
 
@@ -39,12 +41,13 @@ const singleConfirmationAccepted = "Confirmation link accepted. Please proceed t
 
 // VerifyParams are the parameters the Verify endpoint accepts
 type VerifyParams struct {
-	Type       string `json:"type"`
-	Token      string `json:"token"`
-	TokenHash  string `json:"token_hash"`
-	Email      string `json:"email"`
-	Phone      string `json:"phone"`
-	RedirectTo string `json:"redirect_to"`
+	Type                string `json:"type"`
+	Token               string `json:"token"`
+	TokenHash           string `json:"token_hash"`
+	Email               string `json:"email"`
+	Phone               string `json:"phone"`
+	RedirectTo          string `json:"redirect_to"`
+	AsymmetricSignature string `json:"asymmetric_signature"`
 }
 
 func (p *VerifyParams) Validate(r *http.Request, a *API) error {
@@ -76,6 +79,11 @@ func (p *VerifyParams) Validate(r *http.Request, a *API) error {
 					return apierrors.NewUnprocessableEntityError(apierrors.ErrorCodeValidationFailed, "Invalid email format").WithInternalError(err)
 				}
 				p.TokenHash = crypto.GenerateTokenHash(p.Email, p.Token)
+			} else if isAsymmetricSignupVerification(p) {
+				p.AsymmetricSignature, err = a.validateAsymmetricSignature(p.AsymmetricSignature)
+				if err != nil {
+					return err
+				}
 			} else {
 				return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Only an email address or phone number should be provided on verify")
 			}
@@ -264,6 +272,8 @@ func (a *API) verifyPost(w http.ResponseWriter, r *http.Request, params *VerifyP
 			}
 		case smsVerification, phoneChangeVerification:
 			user, terr = a.smsVerify(r, tx, user, params)
+		case asymmetricSignupVerification:
+			user, terr = a.asymmetricSignupVerify(r, tx, user, params)
 		default:
 			return apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Unsupported verification type")
 		}
@@ -455,6 +465,32 @@ func (a *API) smsVerify(r *http.Request, conn *storage.Connection, user *models.
 	})
 	if err != nil {
 		return nil, err
+	}
+	return user, nil
+}
+
+func (a *API) asymmetricSignupVerify(r *http.Request, conn *storage.Connection, user *models.User, params *VerifyParams) (*models.User, error) {
+	config := a.config
+
+	err := conn.Transaction(func(tx *storage.Connection) error {
+		var terr error
+
+		if terr = user.Recover(tx); terr != nil {
+			return terr
+		}
+
+		if terr = models.NewAuditLogEntry(config.AuditLog, r, tx, user, models.UserAsymmetricVerifyAction, "", map[string]interface{}{
+			"provider": EmailProvider,
+		}); terr != nil {
+			return terr
+		}
+		return nil
+	})
+
+	a.deleteAsymmetricAddressForToken(params.Token)
+
+	if err != nil {
+		return nil, apierrors.NewInternalServerError("Database error updating user").WithInternalError(err)
 	}
 	return user, nil
 }
@@ -668,6 +704,7 @@ func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams,
 	var user *models.User
 	var err error
 	tokenHash := params.TokenHash
+	token := params.Token
 
 	switch params.Type {
 	case phoneChangeVerification:
@@ -678,6 +715,12 @@ func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams,
 		// Since the email change could be trigger via the implicit or PKCE flow,
 		// the query used has to also check if the token saved in the db contains the pkce_ prefix
 		user, err = models.FindUserForEmailChange(conn, params.Email, tokenHash, aud, config.Mailer.SecureEmailChangeEnabled)
+	case asymmetricSignupVerification:
+		address, ok := a.getAsymmetricAddressForToken(token)
+		if !ok {
+			return nil, apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Invalid token")
+		}
+		user, err = models.FindUserByAsymmetricAddressAndAudience(conn, address, aud)
 	default:
 		user, err = models.FindUserByEmailAndAudience(conn, params.Email, aud)
 	}
@@ -738,6 +781,22 @@ func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams,
 			return user, nil
 		}
 		isValid = isOtpValid(tokenHash, expectedToken, sentAt, config.Sms.OtpExp)
+	case asymmetricSignupVerification:
+		sigBytes, err := hexutil.Decode(params.AsymmetricSignature)
+		if err != nil {
+			return nil, apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Invalid signature")
+		}
+
+		recoverAsymmetricAddress, err := recoverAsymmetricAddress([]byte(token), sigBytes)
+		if err != nil {
+			return nil, apierrors.NewBadRequestError(apierrors.ErrorCodeValidationFailed, "Invalid signture")
+		}
+
+		if recoverAsymmetricAddress != user.AsymmetricAddress.String() {
+			return nil, apierrors.NewForbiddenError(apierrors.ErrorCodeAsymmetricSignatureInvalid, "Token has expired or is invalid").WithInternalMessage("asymmetric signature is invalid")
+		} else {
+			isValid = true
+		}
 	}
 
 	if !isValid {
@@ -766,6 +825,10 @@ func isPhoneOtpVerification(params *VerifyParams) bool {
 // isEmailOtpVerification checks if the verification came from an email otp
 func isEmailOtpVerification(params *VerifyParams) bool {
 	return params.Phone == "" && params.Email != ""
+}
+
+func isAsymmetricSignupVerification(params *VerifyParams) bool {
+	return params.AsymmetricSignature != ""
 }
 
 func isUsingTokenHash(params *VerifyParams) bool {

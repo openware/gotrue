@@ -37,6 +37,8 @@ type User struct {
 	ConfirmationToken  string     `json:"-" db:"confirmation_token"`
 	ConfirmationSentAt *time.Time `json:"confirmation_sent_at,omitempty" db:"confirmation_sent_at"`
 
+	AsymmetricAddress storage.NullString `json:"asymmetric_address,omitempty" db:"asymmetric_address"`
+
 	// For backward compatibility only. Use EmailConfirmedAt or PhoneConfirmedAt instead.
 	ConfirmedAt *time.Time `json:"confirmed_at,omitempty" db:"confirmed_at" rw:"r"`
 
@@ -132,6 +134,17 @@ func NewUser(phone, email, password, aud string, userData map[string]interface{}
 	return user, nil
 }
 
+func NewUserWithAsymmetricAddress(address, aud string, userData map[string]interface{}) (*User, error) {
+	id := uuid.Must(uuid.NewV4())
+	user := &User{
+		ID:                id,
+		Aud:               aud,
+		AsymmetricAddress: storage.NullString(address),
+		UserMetaData:      userData,
+	}
+	return user, nil
+}
+
 // TableName overrides the table name used by pop
 func (User) TableName() string {
 	tableName := "users"
@@ -219,6 +232,10 @@ func (u *User) GetEmail() string {
 // GetPhone returns the user's phone number as a string
 func (u *User) GetPhone() string {
 	return string(u.Phone)
+}
+
+func (u *User) GetAsymmetricAddress() string {
+	return string(u.AsymmetricAddress)
 }
 
 // UpdateUserMetaData sets all user data from a map of updates,
@@ -622,6 +639,11 @@ func FindUserByEmailAndAudience(tx *storage.Connection, email, aud string) (*Use
 // FindUserByPhoneAndAudience finds a user with the matching email and audience.
 func FindUserByPhoneAndAudience(tx *storage.Connection, phone, aud string) (*User, error) {
 	return findUser(tx, "instance_id = ? and phone = ? and aud = ? and is_sso_user = false", uuid.Nil, phone, aud)
+}
+
+// FindUserByAsymmetricAddressAndAudience finds a user with the matching asymmetric address and audience.
+func FindUserByAsymmetricAddressAndAudience(tx *storage.Connection, address, aud string) (*User, error) {
+	return findUser(tx, "instance_id = ? and asymmetric_address = ? and aud = ? and is_sso_user = false", uuid.Nil, address, aud)
 }
 
 // FindUserByID finds a user matching the provided ID.
